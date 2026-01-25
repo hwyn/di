@@ -1,11 +1,11 @@
-export { makeDecorator, makeMethodDecorator, makeParamDecorator, makePropDecorator } from './decorators';
-export { getInjectableDef, INJECTOR_PROV_DEF } from './def';
-export { Inject, Injectable, ROOT_SCOPE, setInjectableDef } from './injectable';
-export { deepProviders, InjectFlags } from './injector';
-export { Injector } from './injector.abstract';
-export { forwardRef, propArgs } from './injector_compatibility';
-export { INJECTOR_SCOPE, InjectorToken } from './injector-token';
-export { MethodProxy } from './method-proxy';
-export { reflectCapabilities } from './reflection-capabilities';
-export type { Provider, TokenKey, Type, TypeClass } from './type-api';
-export { convertToFactory } from './util';
+/**
+ * @file index.ts
+ * @description Public API for the Dependency Injection system.
+ */
+export { Injector, TokenRegistry, INJECTOR, INJECTOR_SCOPE, INTERCEPTORS, HookMetadata, runInInjectionContext } from './registry';
+export { resolveProps as propArgs } from './resolution';
+export { DEBUG_MODE, InstantiationPolicy } from './common';
+export { MethodProxy, Token, MultiToken, Scope } from './features';
+export { deepProviders, resolveMinimal, resolveMinimalAsync, AsyncGovernance } from './resolution';
+export { DecoratorFlags, forwardRef, getInjectableDef, Inject, Optional, Injectable, InjectFlags, IGNORE_SCOPE, InjectorToken, makeDecorator, makeMethodDecorator, makeParamDecorator, makePropDecorator, markInject, Reflector, ROOT_SCOPE, setInjectableDef, } from './metadata';
+export type { Provider, TokenKey, Type, TypeClass } from './metadata';

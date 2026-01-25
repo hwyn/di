@@ -1,0 +1,23 @@
+"use strict";
+/**
+ * @file meta/injectable.ts
+ * @description Defines the @Injectable and @Inject decorators and relevant configuration options.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SkipSelf = exports.Self = exports.Optional = exports.Inject = exports.Injectable = exports.setInjectableDef = void 0;
+var tslib_1 = require("tslib");
+var constants_1 = require("./constants");
+var decorators_1 = require("./decorators");
+var metadata_keys_1 = require("./metadata-keys");
+var setInjectableDef = function (type, opt) {
+    var _a = (opt || {}).providedIn, providedIn = _a === void 0 ? constants_1.ROOT_SCOPE : _a;
+    var def = { token: type, providedIn: providedIn, opt: opt };
+    return (0, metadata_keys_1.setInjectableDef)(type, def);
+};
+exports.setInjectableDef = setInjectableDef;
+exports.Injectable = (0, decorators_1.makeDecorator)('Injectable', function (opt) { return opt; }, exports.setInjectableDef);
+var resolveToken = function (token, opt) { return (tslib_1.__assign(tslib_1.__assign({}, opt), { token: token })); };
+exports.Inject = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Inject', resolveToken), constants_1.DecoratorFlags.Inject);
+exports.Optional = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Optional'), 1 /* InjectFlags.Optional */);
+exports.Self = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Self'), 2 /* InjectFlags.Self */);
+exports.SkipSelf = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('SkipSelf'), 4 /* InjectFlags.SkipSelf */);

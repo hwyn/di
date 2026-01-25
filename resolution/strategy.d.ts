@@ -1,0 +1,10 @@
+import { InjectorRecord, Injector, InterceptorFn } from '../registry';
+import { InjectableDef, Provider, Type } from '../metadata';
+export declare function resolveDefinition(token: any, record: InjectorRecord<any> | undefined | null, scope: any, ctx: Injector): InjectorRecord<any> | null;
+export declare function checkScope(def: InjectableDef<any>, scope: any): boolean;
+export declare function makeRecord<T>(factory?: (ctx?: any) => T, value?: any, multi?: boolean, provider?: Provider, isPrivate?: boolean): InjectorRecord<T>;
+export declare function resolveMulti(token: any, providers: any[], ctx: Injector): any;
+export declare function resolveMultiAsync(token: any, providers: any[], ctx: Injector): Promise<any[]>;
+export declare function convertToFactory(type: Type, provider?: Provider | any): any;
+export declare function createInstance(type: Type, args: any[], props?: any): any;
+export declare function composeInterceptors(interceptors: InterceptorFn[] | null, parentStrategy: ((i: any, t: any) => any) | null, injector: Injector): ((instance: any, token: any) => any) | null;

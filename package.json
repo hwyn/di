@@ -1,26 +1,111 @@
 {
 	"name": "@hwy-fm/di",
-	"version": "0.0.1-beta.2",
+	"version": "0.0.1-beta.4",
 	"private": false,
+	"author": "",
 	"description": "",
+	"type": "module",
+	"engines": {
+		"node": ">=18.0.0"
+	},
 	"main": "./cjs/index.js",
 	"module": "./esm5/index.js",
-	"es2015": "./esm/index.js",
+	"types": "dist/index.d.ts",
 	"exports": {
 		".": {
+			"types": "./index.d.ts",
+			"import": "./esm/index.js",
 			"node": "./cjs/index.js",
 			"require": "./cjs/index.js",
-			"es2015": "./esm/index.js",
 			"default": "./esm5/index.js"
+		},
+		"./common": {
+			"types": "./common/index.d.ts",
+			"import": "./esm/common/index.js",
+			"node": "./cjs/common/index.js",
+			"require": "./cjs/common/index.js",
+			"default": "./esm5/common/index.js"
+		},
+		"./common/*": {
+			"types": "./common/*.d.ts",
+			"import": "./esm/common/*.js",
+			"node": "./cjs/common/*.js",
+			"require": "./cjs/common/*.js",
+			"default": "./esm5/common/*.js"
+		},
+		"./features": {
+			"types": "./features/index.d.ts",
+			"import": "./esm/features/index.js",
+			"node": "./cjs/features/index.js",
+			"require": "./cjs/features/index.js",
+			"default": "./esm5/features/index.js"
+		},
+		"./features/*": {
+			"types": "./features/*.d.ts",
+			"import": "./esm/features/*.js",
+			"node": "./cjs/features/*.js",
+			"require": "./cjs/features/*.js",
+			"default": "./esm5/features/*.js"
+		},
+		"./metadata": {
+			"types": "./metadata/index.d.ts",
+			"import": "./esm/metadata/index.js",
+			"node": "./cjs/metadata/index.js",
+			"require": "./cjs/metadata/index.js",
+			"default": "./esm5/metadata/index.js"
+		},
+		"./metadata/*": {
+			"types": "./metadata/*.d.ts",
+			"import": "./esm/metadata/*.js",
+			"node": "./cjs/metadata/*.js",
+			"require": "./cjs/metadata/*.js",
+			"default": "./esm5/metadata/*.js"
+		},
+		"./registry": {
+			"types": "./registry/index.d.ts",
+			"import": "./esm/registry/index.js",
+			"node": "./cjs/registry/index.js",
+			"require": "./cjs/registry/index.js",
+			"default": "./esm5/registry/index.js"
+		},
+		"./registry/*": {
+			"types": "./registry/*.d.ts",
+			"import": "./esm/registry/*.js",
+			"node": "./cjs/registry/*.js",
+			"require": "./cjs/registry/*.js",
+			"default": "./esm5/registry/*.js"
+		},
+		"./resolution": {
+			"types": "./resolution/index.d.ts",
+			"import": "./esm/resolution/index.js",
+			"node": "./cjs/resolution/index.js",
+			"require": "./cjs/resolution/index.js",
+			"default": "./esm5/resolution/index.js"
+		},
+		"./resolution/*": {
+			"types": "./resolution/*.d.ts",
+			"import": "./esm/resolution/*.js",
+			"node": "./cjs/resolution/*.js",
+			"require": "./cjs/resolution/*.js",
+			"default": "./esm5/resolution/*.js"
+		},
+		"./tests/*": {
+			"types": "./tests/*.d.ts",
+			"import": "./esm/tests/*.js",
+			"node": "./cjs/tests/*.js",
+			"require": "./cjs/tests/*.js",
+			"default": "./esm5/tests/*.js"
 		}
 	},
-	"scripts": {
-		"test": "echo 'Error: no test specified' && exit 1"
+	"bin": {
+		"ts-tools": "./bin/ts-tools.js"
 	},
-	"author": "",
 	"license": "ISC",
 	"dependencies": {
 		"reflect-metadata": "^0.2.2"
+	},
+	"scripts": {
+		"test": "echo 'Error: no test specified' && exit 1"
 	},
 	"sideEffects": [
 		"*.effects.js"
