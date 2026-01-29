@@ -16,8 +16,14 @@ exports.runError = runError;
 exports.onDispose = onDispose;
 var tslib_1 = require("tslib");
 var registry_1 = require("../registry");
+var common_1 = require("../common");
 function onAdmission(token, provider, context) {
     var _a;
+    var global = common_1.InstantiationPolicy.globalAdmission;
+    if (global) {
+        if (global(token, provider, context) === false)
+            return false;
+    }
     var hook = (_a = registry_1.HookMetadata.get(token)) === null || _a === void 0 ? void 0 : _a.onAllow;
     if (hook) {
         return hook(token, provider, context);
@@ -61,7 +67,7 @@ function runBefore(token, record, context) {
     }
 }
 function runBeforeAsync(token, record, context) {
-    return tslib_1.__awaiter(this, void 0, void 0, function () {
+    return tslib_1.__awaiter(this, void 0, Promise, function () {
         var metadata, _a, _b, listener, e_2_1;
         var e_2, _c;
         return tslib_1.__generator(this, function (_d) {
@@ -120,7 +126,7 @@ function runAfter(token, instance, record, context) {
     }
 }
 function runAfterAsync(token, instance, record, context) {
-    return tslib_1.__awaiter(this, void 0, void 0, function () {
+    return tslib_1.__awaiter(this, void 0, Promise, function () {
         var metadata, _a, _b, listener, e_4_1;
         var e_4, _c;
         return tslib_1.__generator(this, function (_d) {

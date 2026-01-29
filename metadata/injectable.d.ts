@@ -4,9 +4,9 @@
  */
 import { ProvidedInScope, Provider, TokenKey, Type } from './provider';
 export type InjectableOptions<S = ProvidedInScope> = (Provider & {
-    providedIn?: S;
+    scope?: S;
 }) | {
-    providedIn?: S;
+    scope?: S;
 };
 export declare const setInjectableDef: <S = ProvidedInScope>(type: Type, opt?: InjectableOptions<S>) => any;
 export declare const Injectable: (opt?: InjectableOptions<ProvidedInScope>) => import("./decorators").ClassDecorator<any>;

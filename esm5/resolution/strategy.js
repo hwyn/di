@@ -1,8 +1,8 @@
 import { __awaiter, __generator, __read, __spreadArray, __values } from "tslib";
 import { instantiate, instantiateAsync } from "./instantiator.js";
 import { ɵɵInject, HookMetadata } from "../registry/index.js";
-import { resolveParams, resolveProps, ResolveMode } from "./prop-resolution.js";
-import { EMPTY_ARRAY, getInjectableDef, IGNORE_SCOPE, NO_VALUE, Reflector } from "../metadata/index.js";
+import { resolveParams, resolveProps } from "./prop-resolution.js";
+import { EMPTY_ARRAY, getInjectableDef, IGNORE_SCOPE, NO_VALUE, RecordFlags, Reflector, ResolveMode } from "../metadata/index.js";
 import { AsyncGovernance } from "./async-governance.js";
 import { onAdmission, onScopeCheck } from "./standard-hook.js";
 export function resolveDefinition(token, record, scope, ctx) {
@@ -38,18 +38,19 @@ function resolveDecoratedDef(token, scope, ctx) {
     return record;
 }
 export function checkScope(def, scope) {
-    return scope === IGNORE_SCOPE || !def.providedIn || def.providedIn === scope;
+    return scope === IGNORE_SCOPE || !def.scope || def.scope === scope;
 }
 export function makeRecord(factory, value, multi, provider, isPrivate) {
     if (value === void 0) { value = NO_VALUE; }
     var record = { factory: factory, value: value, multi: multi ? [] : undefined, provider: provider };
     if (isPrivate)
-        record.flags = (record.flags || 0) | 268435456 /* RecordFlags.Private */;
+        record.flags = (record.flags || 0) | RecordFlags.Private;
     return record;
 }
 export function resolveMulti(token, providers, ctx) {
     var e_1, _a;
     var results = [];
+    var masks = [];
     var hasPromise = false;
     try {
         for (var providers_1 = __values(providers), providers_1_1 = providers_1.next(); !providers_1_1.done; providers_1_1 = providers_1.next()) {
@@ -60,6 +61,7 @@ export function resolveMulti(token, providers, ctx) {
             if (isPromise(result))
                 hasPromise = true;
             results.push(result);
+            masks.push(!('useExisting' in provider || 'useValue' in provider));
         }
     }
     catch (e_1_1) { e_1 = { error: e_1_1 }; }
@@ -70,21 +72,23 @@ export function resolveMulti(token, providers, ctx) {
         finally { if (e_1) throw e_1.error; }
     }
     if (hasPromise)
-        return AsyncGovernance.secureMultiResolve(results);
+        return AsyncGovernance.secureMultiResolve(results, masks);
     return results;
 }
 export function resolveMultiAsync(token, providers, ctx) {
-    return __awaiter(this, void 0, void 0, function () {
-        var promises, providers_2, providers_2_1, provider, factory_2, record;
+    return __awaiter(this, void 0, Promise, function () {
+        var promises, masks, providers_2, providers_2_1, provider, factory_2, record;
         var e_2, _a;
         return __generator(this, function (_b) {
             promises = [];
+            masks = [];
             try {
                 for (providers_2 = __values(providers), providers_2_1 = providers_2.next(); !providers_2_1.done; providers_2_1 = providers_2.next()) {
                     provider = providers_2_1.value;
                     factory_2 = convertToFactory(token, provider);
                     record = makeRecord(factory_2, NO_VALUE, false, provider);
                     promises.push(instantiateAsync(token, record, ctx));
+                    masks.push(!('useExisting' in provider || 'useValue' in provider));
                 }
             }
             catch (e_2_1) { e_2 = { error: e_2_1 }; }
@@ -94,7 +98,7 @@ export function resolveMultiAsync(token, providers, ctx) {
                 }
                 finally { if (e_2) throw e_2.error; }
             }
-            return [2 /*return*/, AsyncGovernance.secureMultiResolve(promises)];
+            return [2 /*return*/, AsyncGovernance.secureMultiResolve(promises, masks)];
         });
     });
 }
@@ -122,7 +126,8 @@ function createFromUseFactory(type, provider) {
         var params = resolveParams(deps, EMPTY_ARRAY, mode);
         for (var i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return AsyncGovernance.secureMultiResolve(params).then(function (args) { return useFactory.apply(void 0, __spreadArray([], __read(args), false)); });
+                var mask = new Array(params.length).fill(false);
+                return AsyncGovernance.secureMultiResolve(params, mask).then(function (args) { return useFactory.apply(void 0, __spreadArray([], __read(args), false)); });
             }
         }
         return useFactory.apply(void 0, __spreadArray([], __read(params), false));
@@ -144,7 +149,8 @@ function createDepsFactory(type, deps) {
         var params = resolveParams(deps, EMPTY_ARRAY, mode);
         for (var i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return AsyncGovernance.secureMultiResolve(params).then(function (args) { return Reflect.construct(type, args); });
+                var mask = new Array(params.length).fill(false);
+                return AsyncGovernance.secureMultiResolve(params, mask).then(function (args) { return Reflect.construct(type, args); });
             }
         }
         return Reflect.construct(type, params);
@@ -157,7 +163,8 @@ function createFullFactory(type, deps, props) {
         var params = resolveParams(deps, EMPTY_ARRAY, mode);
         for (var i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return AsyncGovernance.secureMultiResolve(params).then(function (args) { return __awaiter(_this, void 0, void 0, function () {
+                var mask = new Array(params.length).fill(false);
+                return AsyncGovernance.secureMultiResolve(params, mask).then(function (args) { return __awaiter(_this, void 0, void 0, function () {
                     var instance;
                     return __generator(this, function (_a) {
                         switch (_a.label) {
@@ -177,7 +184,7 @@ function resolvePropsMetadata(type) {
     if (!Reflector.hasPropMetadata(type))
         return undefined;
     var props = Reflector.resolveProperties(type);
-    for (var _1 in props) {
+    for (var _ in props) {
         return props;
     }
     return undefined;

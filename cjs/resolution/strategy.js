@@ -48,18 +48,19 @@ function resolveDecoratedDef(token, scope, ctx) {
     return record;
 }
 function checkScope(def, scope) {
-    return scope === metadata_1.IGNORE_SCOPE || !def.providedIn || def.providedIn === scope;
+    return scope === metadata_1.IGNORE_SCOPE || !def.scope || def.scope === scope;
 }
 function makeRecord(factory, value, multi, provider, isPrivate) {
     if (value === void 0) { value = metadata_1.NO_VALUE; }
     var record = { factory: factory, value: value, multi: multi ? [] : undefined, provider: provider };
     if (isPrivate)
-        record.flags = (record.flags || 0) | 268435456 /* RecordFlags.Private */;
+        record.flags = (record.flags || 0) | metadata_1.RecordFlags.Private;
     return record;
 }
 function resolveMulti(token, providers, ctx) {
     var e_1, _a;
     var results = [];
+    var masks = [];
     var hasPromise = false;
     try {
         for (var providers_1 = tslib_1.__values(providers), providers_1_1 = providers_1.next(); !providers_1_1.done; providers_1_1 = providers_1.next()) {
@@ -70,6 +71,7 @@ function resolveMulti(token, providers, ctx) {
             if (isPromise(result))
                 hasPromise = true;
             results.push(result);
+            masks.push(!('useExisting' in provider || 'useValue' in provider));
         }
     }
     catch (e_1_1) { e_1 = { error: e_1_1 }; }
@@ -80,21 +82,23 @@ function resolveMulti(token, providers, ctx) {
         finally { if (e_1) throw e_1.error; }
     }
     if (hasPromise)
-        return async_governance_1.AsyncGovernance.secureMultiResolve(results);
+        return async_governance_1.AsyncGovernance.secureMultiResolve(results, masks);
     return results;
 }
 function resolveMultiAsync(token, providers, ctx) {
-    return tslib_1.__awaiter(this, void 0, void 0, function () {
-        var promises, providers_2, providers_2_1, provider, factory_2, record;
+    return tslib_1.__awaiter(this, void 0, Promise, function () {
+        var promises, masks, providers_2, providers_2_1, provider, factory_2, record;
         var e_2, _a;
         return tslib_1.__generator(this, function (_b) {
             promises = [];
+            masks = [];
             try {
                 for (providers_2 = tslib_1.__values(providers), providers_2_1 = providers_2.next(); !providers_2_1.done; providers_2_1 = providers_2.next()) {
                     provider = providers_2_1.value;
                     factory_2 = convertToFactory(token, provider);
                     record = makeRecord(factory_2, metadata_1.NO_VALUE, false, provider);
                     promises.push((0, instantiator_1.instantiateAsync)(token, record, ctx));
+                    masks.push(!('useExisting' in provider || 'useValue' in provider));
                 }
             }
             catch (e_2_1) { e_2 = { error: e_2_1 }; }
@@ -104,7 +108,7 @@ function resolveMultiAsync(token, providers, ctx) {
                 }
                 finally { if (e_2) throw e_2.error; }
             }
-            return [2 /*return*/, async_governance_1.AsyncGovernance.secureMultiResolve(promises)];
+            return [2 /*return*/, async_governance_1.AsyncGovernance.secureMultiResolve(promises, masks)];
         });
     });
 }
@@ -128,11 +132,12 @@ function createFromUseFactory(type, provider) {
     if (!deps || deps.length === 0)
         return withType(function () { return useFactory(); }, type);
     var fn = function (_, mode) {
-        if (mode === void 0) { mode = prop_resolution_1.ResolveMode.Sync; }
+        if (mode === void 0) { mode = metadata_1.ResolveMode.Sync; }
         var params = (0, prop_resolution_1.resolveParams)(deps, metadata_1.EMPTY_ARRAY, mode);
         for (var i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return async_governance_1.AsyncGovernance.secureMultiResolve(params).then(function (args) { return useFactory.apply(void 0, tslib_1.__spreadArray([], tslib_1.__read(args), false)); });
+                var mask = new Array(params.length).fill(false);
+                return async_governance_1.AsyncGovernance.secureMultiResolve(params, mask).then(function (args) { return useFactory.apply(void 0, tslib_1.__spreadArray([], tslib_1.__read(args), false)); });
             }
         }
         return useFactory.apply(void 0, tslib_1.__spreadArray([], tslib_1.__read(params), false));
@@ -150,11 +155,12 @@ function factory(deps, type) {
 }
 function createDepsFactory(type, deps) {
     return function (_, mode) {
-        if (mode === void 0) { mode = prop_resolution_1.ResolveMode.Sync; }
+        if (mode === void 0) { mode = metadata_1.ResolveMode.Sync; }
         var params = (0, prop_resolution_1.resolveParams)(deps, metadata_1.EMPTY_ARRAY, mode);
         for (var i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return async_governance_1.AsyncGovernance.secureMultiResolve(params).then(function (args) { return Reflect.construct(type, args); });
+                var mask = new Array(params.length).fill(false);
+                return async_governance_1.AsyncGovernance.secureMultiResolve(params, mask).then(function (args) { return Reflect.construct(type, args); });
             }
         }
         return Reflect.construct(type, params);
@@ -163,17 +169,18 @@ function createDepsFactory(type, deps) {
 function createFullFactory(type, deps, props) {
     var _this = this;
     return function (_, mode) {
-        if (mode === void 0) { mode = prop_resolution_1.ResolveMode.Sync; }
+        if (mode === void 0) { mode = metadata_1.ResolveMode.Sync; }
         var params = (0, prop_resolution_1.resolveParams)(deps, metadata_1.EMPTY_ARRAY, mode);
         for (var i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return async_governance_1.AsyncGovernance.secureMultiResolve(params).then(function (args) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+                var mask = new Array(params.length).fill(false);
+                return async_governance_1.AsyncGovernance.secureMultiResolve(params, mask).then(function (args) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
                     var instance;
                     return tslib_1.__generator(this, function (_a) {
                         switch (_a.label) {
                             case 0:
                                 instance = Reflect.construct(type, args);
-                                return [4 /*yield*/, (0, prop_resolution_1.resolveProps)(instance, props, prop_resolution_1.ResolveMode.Async)];
+                                return [4 /*yield*/, (0, prop_resolution_1.resolveProps)(instance, props, metadata_1.ResolveMode.Async)];
                             case 1: return [2 /*return*/, _a.sent()];
                         }
                     });
@@ -187,7 +194,7 @@ function resolvePropsMetadata(type) {
     if (!metadata_1.Reflector.hasPropMetadata(type))
         return undefined;
     var props = metadata_1.Reflector.resolveProperties(type);
-    for (var _1 in props) {
+    for (var _ in props) {
         return props;
     }
     return undefined;

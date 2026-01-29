@@ -98,7 +98,7 @@ let TokenRegistry = class TokenRegistry {
     }
 };
 TokenRegistry = __decorate([
-    Injectable({ providedIn: ROOT_SCOPE, useFactory: () => tokenRegistry })
+    Injectable({ scope: ROOT_SCOPE, useFactory: () => tokenRegistry })
 ], TokenRegistry);
 export { TokenRegistry };
 const tokenRegistry = new TokenRegistry();

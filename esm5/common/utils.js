@@ -43,6 +43,17 @@ export var InstantiationPolicy = {
     strictAsyncLifecycle: true,
     /** If true, prohibits adding providers to an already resolved multi-token. */
     strictMultiInjection: true,
+    /** Active environment context for registration */
+    activeEnv: null,
+    /** Global admission policy */
+    globalAdmission: null,
+    // Helper to register debug tools safely
+    registerDebugTools: function (tools) {
+        if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
+            var self = InstantiationPolicy;
+            self.debugTools = Object.assign(self.debugTools || {}, tools);
+        }
+    }
 };
 export function debugLog(message) {
     var args = [];
@@ -55,8 +66,8 @@ export function debugLog(message) {
 }
 export function enhanceError(e, token) {
     if (e instanceof Error) {
-        var name_1 = token.name || token.toString();
-        e.message = "".concat(e.message, "  -> ").concat(name_1);
+        var name = token.name || token.toString();
+        e.message = "".concat(e.message, "  -> ").concat(name);
     }
     return e;
 }

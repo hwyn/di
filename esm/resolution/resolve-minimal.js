@@ -4,7 +4,7 @@
  */
 import { __awaiter } from "tslib";
 import { INJECTOR, runInInjectionContext } from "../registry/index.js";
-import { IGNORE_SCOPE } from "../metadata/index.js";
+import { IGNORE_SCOPE, RecordFlags } from "../metadata/index.js";
 import { dispose, instantiate, instantiateAsync, isDisposable } from "./instantiator.js";
 import { resolveDefinition } from "./strategy.js";
 import { onDispose, onTransientCheck } from "./standard-hook.js";
@@ -13,7 +13,7 @@ function findParentRecord(cursor, t) {
     var _a;
     while (cursor) {
         const r = (_a = cursor.getRecord) === null || _a === void 0 ? void 0 : _a.call(cursor, t);
-        if (r && !((r.flags || 0) & 268435456 /* RecordFlags.Private */)) {
+        if (r && !((r.flags || 0) & RecordFlags.Private)) {
             return r;
         }
         cursor = cursor.parent;
@@ -101,7 +101,7 @@ export function resolveMinimalAsync(token, parent) {
                 const val = yield valPromise;
                 // Update cache with value if desired, or leave promise. Leaving promise is standard for simple async caches to avoid race conditions.
                 // However, for active tracking we need the instance.
-                if (val && typeof val === 'object' && (isDisposable(val) || record.flags === 268435456 /* RecordFlags.Private */)) {
+                if (val && typeof val === 'object' && (isDisposable(val) || record.flags === RecordFlags.Private)) {
                     active.push({ instance: val, token: t });
                 }
                 return val;

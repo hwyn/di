@@ -2,26 +2,27 @@
  * @file resolution/cyclic.ts
  * @description Logic for handling cyclic dependencies via Proxy interception.
  */
+import { RecordFlags } from "../metadata/index.js";
 /**
  * Wraps the instantiation process with safeguards against cyclic dependencies.
  * If a cycle is detected, it returns a Proxy instead of the real instance (for supported providers).
  */
 export function guardCyclicDependency(token, record, next) {
-    if (record.flags & 1073741824 /* RecordFlags.MaskInstantiating */) {
+    if (record.flags & RecordFlags.MaskInstantiating) {
         return handleCyclicReference(record);
     }
-    record.flags = (record.flags || 0) | 1073741824 /* RecordFlags.MaskInstantiating */;
+    record.flags = (record.flags || 0) | RecordFlags.MaskInstantiating;
     try {
         const instance = next();
-        if (record.flags & 536870912 /* RecordFlags.MaskHasProxy */) {
+        if (record.flags & RecordFlags.MaskHasProxy) {
             linkProxyState(record, instance);
-            record.flags &= ~536870912 /* RecordFlags.MaskHasProxy */;
+            record.flags &= ~RecordFlags.MaskHasProxy;
             record.__proxy__ = undefined;
         }
         return instance;
     }
     finally {
-        record.flags &= ~1073741824 /* RecordFlags.MaskInstantiating */;
+        record.flags &= ~RecordFlags.MaskInstantiating;
     }
 }
 function handleCyclicReference(record) {
@@ -33,7 +34,7 @@ function handleCyclicReference(record) {
                 `Note: 'useFactory' providers do not support cyclic dependencies.`);
         }
         record.__proxy__ = createProxyUtil(type);
-        record.flags |= 536870912 /* RecordFlags.MaskHasProxy */;
+        record.flags |= RecordFlags.MaskHasProxy;
     }
     return record.__proxy__;
 }

@@ -1,8 +1,8 @@
 import { __awaiter } from "tslib";
 import { instantiate, instantiateAsync } from "./instantiator.js";
 import { ɵɵInject, HookMetadata } from "../registry/index.js";
-import { resolveParams, resolveProps, ResolveMode } from "./prop-resolution.js";
-import { EMPTY_ARRAY, getInjectableDef, IGNORE_SCOPE, NO_VALUE, Reflector } from "../metadata/index.js";
+import { resolveParams, resolveProps } from "./prop-resolution.js";
+import { EMPTY_ARRAY, getInjectableDef, IGNORE_SCOPE, NO_VALUE, RecordFlags, Reflector, ResolveMode } from "../metadata/index.js";
 import { AsyncGovernance } from "./async-governance.js";
 import { onAdmission, onScopeCheck } from "./standard-hook.js";
 export function resolveDefinition(token, record, scope, ctx) {
@@ -38,16 +38,17 @@ function resolveDecoratedDef(token, scope, ctx) {
     return record;
 }
 export function checkScope(def, scope) {
-    return scope === IGNORE_SCOPE || !def.providedIn || def.providedIn === scope;
+    return scope === IGNORE_SCOPE || !def.scope || def.scope === scope;
 }
 export function makeRecord(factory, value = NO_VALUE, multi, provider, isPrivate) {
     const record = { factory, value, multi: multi ? [] : undefined, provider };
     if (isPrivate)
-        record.flags = (record.flags || 0) | 268435456 /* RecordFlags.Private */;
+        record.flags = (record.flags || 0) | RecordFlags.Private;
     return record;
 }
 export function resolveMulti(token, providers, ctx) {
     const results = [];
+    const masks = [];
     let hasPromise = false;
     for (const provider of providers) {
         const factory = convertToFactory(token, provider);
@@ -56,20 +57,23 @@ export function resolveMulti(token, providers, ctx) {
         if (isPromise(result))
             hasPromise = true;
         results.push(result);
+        masks.push(!('useExisting' in provider || 'useValue' in provider));
     }
     if (hasPromise)
-        return AsyncGovernance.secureMultiResolve(results);
+        return AsyncGovernance.secureMultiResolve(results, masks);
     return results;
 }
 export function resolveMultiAsync(token, providers, ctx) {
     return __awaiter(this, void 0, void 0, function* () {
         const promises = [];
+        const masks = [];
         for (const provider of providers) {
             const factory = convertToFactory(token, provider);
             const record = makeRecord(factory, NO_VALUE, false, provider);
             promises.push(instantiateAsync(token, record, ctx));
+            masks.push(!('useExisting' in provider || 'useValue' in provider));
         }
-        return AsyncGovernance.secureMultiResolve(promises);
+        return AsyncGovernance.secureMultiResolve(promises, masks);
     });
 }
 export function convertToFactory(type, provider) {
@@ -95,7 +99,8 @@ function createFromUseFactory(type, provider) {
         const params = resolveParams(deps, EMPTY_ARRAY, mode);
         for (let i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return AsyncGovernance.secureMultiResolve(params).then(args => useFactory(...args));
+                const mask = new Array(params.length).fill(false);
+                return AsyncGovernance.secureMultiResolve(params, mask).then(args => useFactory(...args));
             }
         }
         return useFactory(...params);
@@ -116,7 +121,8 @@ function createDepsFactory(type, deps) {
         const params = resolveParams(deps, EMPTY_ARRAY, mode);
         for (let i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return AsyncGovernance.secureMultiResolve(params).then(args => Reflect.construct(type, args));
+                const mask = new Array(params.length).fill(false);
+                return AsyncGovernance.secureMultiResolve(params, mask).then(args => Reflect.construct(type, args));
             }
         }
         return Reflect.construct(type, params);
@@ -127,7 +133,8 @@ function createFullFactory(type, deps, props) {
         const params = resolveParams(deps, EMPTY_ARRAY, mode);
         for (let i = 0; i < params.length; i++) {
             if (isPromise(params[i])) {
-                return AsyncGovernance.secureMultiResolve(params).then((args) => __awaiter(this, void 0, void 0, function* () {
+                const mask = new Array(params.length).fill(false);
+                return AsyncGovernance.secureMultiResolve(params, mask).then((args) => __awaiter(this, void 0, void 0, function* () {
                     const instance = Reflect.construct(type, args);
                     return yield resolveProps(instance, props, ResolveMode.Async);
                 }));

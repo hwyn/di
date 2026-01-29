@@ -7,10 +7,12 @@ import { checkScope } from "../resolution/strategy.js";
 export function Scope(scope) {
     return function (target) {
         HookMetadata.hook(target, {
-            onScopeCheck: (def, requestingScope) => {
+            onScopeCheck: (definition, requestingScope) => {
                 if (scope === 'any')
                     return true;
-                return checkScope(def, scope || requestingScope);
+                if (!definition)
+                    return false;
+                return checkScope(definition, scope || requestingScope);
             }
         });
     };

@@ -2,14 +2,10 @@
  * @file core/resolution.ts
  * @description Handles the logic for resolving dependencies, including parameter and property injection and transformation.
  */
-import { DecoratorFlags, DI_DECORATOR_FLAG } from "../metadata/index.js";
-import { ɵɵInject, ɵɵInjectAsync } from "../registry/index.js";
-export var ResolveMode;
-(function (ResolveMode) {
-    ResolveMode[ResolveMode["Sync"] = 0] = "Sync";
-    ResolveMode[ResolveMode["Async"] = 1] = "Async";
-})(ResolveMode || (ResolveMode = {}));
+import { DecoratorFlags, DI_DECORATOR_FLAG, ResolveMode } from "../metadata/index.js";
+import { getInjector, ɵɵInject, ɵɵInjectAsync } from "../registry/index.js";
 const defCache = new WeakMap();
+const EMPTY_DEF = { token: undefined, flags: 0, transforms: undefined };
 function compileDependency(metas) {
     let flags = 0;
     let token;
@@ -26,66 +22,78 @@ function compileDependency(metas) {
         else if (!item.transform) {
             token = item;
         }
-        if (item.transform)
+        if (item.transform) {
             (transforms !== null && transforms !== void 0 ? transforms : (transforms = [])).push(item);
+        }
     }
     if (transforms)
         transforms.reverse();
     return { token: token, flags, transforms };
 }
 function getDef(metas) {
-    if (Array.isArray(metas)) {
-        let def = defCache.get(metas);
-        if (!def) {
-            def = compileDependency(metas);
-            defCache.set(metas, def);
-        }
-        return def;
+    if (!Array.isArray(metas)) {
+        const isObjectOrFunc = metas && (typeof metas === 'object' || typeof metas === 'function');
+        return isObjectOrFunc ? { token: metas, flags: 0, transforms: undefined } : EMPTY_DEF;
     }
-    else {
-        if (metas && (typeof metas === 'object' || typeof metas === 'function')) {
-            let def = defCache.get(metas);
-            if (!def) {
-                def = { token: metas, flags: 0, transforms: undefined };
-                defCache.set(metas, def);
-            }
-            return def;
-        }
-        return { token: metas, flags: 0, transforms: undefined };
+    let def = defCache.get(metas);
+    if (!def) {
+        def = compileDependency(metas);
+        defCache.set(metas, def);
     }
+    return def;
 }
 function resolveValue(metas, executor, context, mode) {
     const def = getDef(metas);
     let value;
     if (def.token !== undefined) {
-        value = mode === ResolveMode.Async
-            ? ɵɵInjectAsync(def.token, def.flags)
-            : ɵɵInject(def.token, def.flags);
+        value = mode === ResolveMode.Async ? ɵɵInjectAsync(def.token, def.flags) : ɵɵInject(def.token, def.flags);
     }
     if (def.transforms) {
         if (mode === ResolveMode.Async && value instanceof Promise) {
-            value = value.then(v => applyTransforms(def.transforms, executor, context, v));
+            value = value.then(v => applyTransforms(def.transforms, executor, context, v, mode));
         }
         else {
-            value = applyTransforms(def.transforms, executor, context, value);
+            value = applyTransforms(def.transforms, executor, context, value, mode);
         }
     }
     return value;
 }
-function applyTransforms(transforms, executor, context, value) {
-    for (const transformMeta of transforms) {
-        value = executor(context, transformMeta.transform, transformMeta, value);
+function applyTransforms(transforms, executor, context, initialValue, mode) {
+    let value = initialValue;
+    for (const meta of transforms) {
+        value = executor(context, meta.transform, meta, value, mode);
     }
     return value;
 }
-const paramExecutor = (args, t, m, v) => t(m, v, ...args);
+const paramExecutor = (ctx, transform, meta, value, mode) => {
+    return transform({
+        mode,
+        value,
+        meta,
+        args: ctx.args,
+        key: ctx.key,
+        injector: ctx.injector
+    });
+};
+const propExecutor = (ctx, transform, meta, value, mode) => {
+    return transform({
+        mode,
+        value,
+        meta,
+        target: ctx.target,
+        key: ctx.key,
+        injector: ctx.injector
+    });
+};
 export function resolveParams(deps, args = [], mode = ResolveMode.Sync) {
     const len = deps.length;
     const result = new Array(len);
+    const context = { args, key: 0, injector: getInjector() };
     for (let i = 0; i < len; i++) {
         const dep = deps[i];
         if (Array.isArray(dep)) {
-            result[i] = resolveValue(dep, paramExecutor, args, mode);
+            context.key = i;
+            result[i] = resolveValue(dep, paramExecutor, context, mode);
         }
         else {
             result[i] = mode === ResolveMode.Async ? ɵɵInjectAsync(dep, 0) : ɵɵInject(dep, 0);
@@ -93,12 +101,13 @@ export function resolveParams(deps, args = [], mode = ResolveMode.Sync) {
     }
     return result;
 }
-const propExecutor = (ctx, t, m, v) => t(m, v, ctx.target, ctx.key);
 export function resolveProps(target, props, mode = ResolveMode.Sync) {
+    const context = { target, key: '', injector: getInjector() };
     if (mode === ResolveMode.Async) {
         const promises = [];
         for (const key in props) {
-            const v = resolveValue(props[key], propExecutor, { target, key }, mode);
+            context.key = key;
+            const v = resolveValue(props[key], propExecutor, context, mode);
             if (v instanceof Promise) {
                 promises.push(v.then(val => {
                     if (val !== target[key])
@@ -114,7 +123,8 @@ export function resolveProps(target, props, mode = ResolveMode.Sync) {
     }
     else {
         for (const key in props) {
-            const value = resolveValue(props[key], propExecutor, { target, key }, mode);
+            context.key = key;
+            const value = resolveValue(props[key], propExecutor, context, mode);
             if (value !== target[key])
                 target[key] = value;
         }

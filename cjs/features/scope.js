@@ -10,10 +10,12 @@ var strategy_1 = require("../resolution/strategy");
 function Scope(scope) {
     return function (target) {
         registry_1.HookMetadata.hook(target, {
-            onScopeCheck: function (def, requestingScope) {
+            onScopeCheck: function (definition, requestingScope) {
                 if (scope === 'any')
                     return true;
-                return (0, strategy_1.checkScope)(def, scope || requestingScope);
+                if (!definition)
+                    return false;
+                return (0, strategy_1.checkScope)(definition, scope || requestingScope);
             }
         });
     };

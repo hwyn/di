@@ -5,4 +5,5 @@
 import { InjectorToken } from '../metadata';
 export declare const INJECTOR: InjectorToken;
 export declare const INJECTOR_SCOPE: InjectorToken;
+export declare const INJECTOR_ENV: InjectorToken;
 export declare const INTERCEPTORS: InjectorToken;

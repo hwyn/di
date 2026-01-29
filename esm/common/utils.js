@@ -42,6 +42,17 @@ export const InstantiationPolicy = {
     strictAsyncLifecycle: true,
     /** If true, prohibits adding providers to an already resolved multi-token. */
     strictMultiInjection: true,
+    /** Active environment context for registration */
+    activeEnv: null,
+    /** Global admission policy */
+    globalAdmission: null,
+    // Helper to register debug tools safely
+    registerDebugTools: (tools) => {
+        if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
+            const self = InstantiationPolicy;
+            self.debugTools = Object.assign(self.debugTools || {}, tools);
+        }
+    }
 };
 export function debugLog(message, ...args) {
     if (DEBUG_MODE.enabled) {

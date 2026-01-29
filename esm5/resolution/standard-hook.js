@@ -4,8 +4,14 @@
  */
 import { __awaiter, __generator, __values } from "tslib";
 import { HookMetadata } from "../registry/index.js";
+import { InstantiationPolicy } from "../common/index.js";
 export function onAdmission(token, provider, context) {
     var _a;
+    var global = InstantiationPolicy.globalAdmission;
+    if (global) {
+        if (global(token, provider, context) === false)
+            return false;
+    }
     var hook = (_a = HookMetadata.get(token)) === null || _a === void 0 ? void 0 : _a.onAllow;
     if (hook) {
         return hook(token, provider, context);
@@ -49,7 +55,7 @@ export function runBefore(token, record, context) {
     }
 }
 export function runBeforeAsync(token, record, context) {
-    return __awaiter(this, void 0, void 0, function () {
+    return __awaiter(this, void 0, Promise, function () {
         var metadata, _a, _b, listener, e_2_1;
         var e_2, _c;
         return __generator(this, function (_d) {
@@ -108,7 +114,7 @@ export function runAfter(token, instance, record, context) {
     }
 }
 export function runAfterAsync(token, instance, record, context) {
-    return __awaiter(this, void 0, void 0, function () {
+    return __awaiter(this, void 0, Promise, function () {
         var metadata, _a, _b, listener, e_4_1;
         var e_4, _c;
         return __generator(this, function (_d) {

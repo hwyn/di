@@ -59,9 +59,10 @@ var MethodProxy = /** @class */ (function () {
         });
         return proxy;
     };
+    var _a;
     tslib_1.__decorate([
         (0, metadata_1.Inject)(registry_1.Injector),
-        tslib_1.__metadata("design:type", resolution_1.StaticInjector)
+        tslib_1.__metadata("design:type", typeof (_a = typeof resolution_1.StaticInjector !== "undefined" && resolution_1.StaticInjector) === "function" ? _a : Object)
     ], MethodProxy.prototype, "injector", void 0);
     MethodProxy = tslib_1.__decorate([
         (0, metadata_1.Injectable)()

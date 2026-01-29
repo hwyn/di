@@ -1,16 +1,15 @@
 {
 	"name": "@hwy-fm/di",
-	"version": "0.0.1-beta.4",
-	"private": false,
-	"author": "",
+	"version": "0.0.1-beta.6",
 	"description": "",
+	"private": false,
+	"license": "ISC",
+	"author": "",
 	"type": "module",
-	"engines": {
-		"node": ">=18.0.0"
-	},
 	"main": "./cjs/index.js",
 	"module": "./esm5/index.js",
-	"types": "dist/index.d.ts",
+	"import": "./esm/index.js",
+	"types": "./index.d.ts",
 	"exports": {
 		".": {
 			"types": "./index.d.ts",
@@ -88,26 +87,13 @@
 			"node": "./cjs/resolution/*.js",
 			"require": "./cjs/resolution/*.js",
 			"default": "./esm5/resolution/*.js"
-		},
-		"./tests/*": {
-			"types": "./tests/*.d.ts",
-			"import": "./esm/tests/*.js",
-			"node": "./cjs/tests/*.js",
-			"require": "./cjs/tests/*.js",
-			"default": "./esm5/tests/*.js"
 		}
-	},
-	"bin": {
-		"ts-tools": "./bin/ts-tools.js"
-	},
-	"license": "ISC",
-	"dependencies": {
-		"reflect-metadata": "^0.2.2"
 	},
 	"scripts": {
 		"test": "echo 'Error: no test specified' && exit 1"
 	},
-	"sideEffects": [
-		"*.effects.js"
-	]
+	"dependencies": {
+		"reflect-metadata": "^0.2.2"
+	},
+	"sideEffects": true
 }

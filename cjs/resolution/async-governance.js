@@ -24,7 +24,7 @@ var AsyncGovernance = /** @class */ (function () {
         }
     };
     AsyncGovernance.governLifecycle = function (record, worker) {
-        return tslib_1.__awaiter(this, void 0, void 0, function () {
+        return tslib_1.__awaiter(this, void 0, Promise, function () {
             var tokenName, timer, startTime, timeoutPromise, instance, duration, e_1;
             var _a;
             return tslib_1.__generator(this, function (_b) {
@@ -72,8 +72,17 @@ var AsyncGovernance = /** @class */ (function () {
             throw new Error("Circular dependency or Race Condition: Token '".concat(tokenName, "' is currently being resolved asynchronously. Use 'getAsync' or await the parent resolution."));
         }
     };
-    AsyncGovernance.secureMultiResolve = function (resolutions) {
-        return tslib_1.__awaiter(this, void 0, void 0, function () {
+    AsyncGovernance.enforceSyncConstraint = function (token) {
+        var _a;
+        var name = token.name || token.toString();
+        var msg = "[DI] Warning: Synchronous resolution of token '".concat(name, "' resulted in an async Promise. Ensure all dependencies are synchronous or use 'getAsync'.");
+        if (common_1.InstantiationPolicy.strictAsyncLifecycle) {
+            throw new Error(msg.replace('Warning:', 'Error:'));
+        }
+        (_a = common_1.InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(msg);
+    };
+    AsyncGovernance.secureMultiResolve = function (resolutions, disposeMask) {
+        return tslib_1.__awaiter(this, void 0, Promise, function () {
             var results, rejected, reasons;
             var _this = this;
             return tslib_1.__generator(this, function (_a) {
@@ -87,7 +96,12 @@ var AsyncGovernance = /** @class */ (function () {
                             // Rollback: Dispose any successful resolutions in this transaction
                             results
                                 .filter(function (r) { return r.status === 'fulfilled'; })
-                                .forEach(function (s) { return _this.dispose(s.value); });
+                                .forEach(function (s, index) {
+                                // If mask exists, only dispose if true. Default is true (dispose all).
+                                var shouldDispose = disposeMask ? disposeMask[index] : true;
+                                if (shouldDispose)
+                                    _this.dispose(s.value);
+                            });
                             if (rejected.length === 1) {
                                 throw rejected[0].reason;
                             }

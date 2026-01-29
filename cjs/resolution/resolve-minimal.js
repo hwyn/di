@@ -17,7 +17,7 @@ function findParentRecord(cursor, t) {
     var _a;
     while (cursor) {
         var r = (_a = cursor.getRecord) === null || _a === void 0 ? void 0 : _a.call(cursor, t);
-        if (r && !((r.flags || 0) & 268435456 /* RecordFlags.Private */)) {
+        if (r && !((r.flags || 0) & metadata_1.RecordFlags.Private)) {
             return r;
         }
         cursor = cursor.parent;
@@ -75,9 +75,9 @@ function resolveMinimal(token, parent) {
     });
 }
 function resolveMinimalAsync(token, parent) {
-    return tslib_1.__awaiter(this, void 0, void 0, function () {
+    return tslib_1.__awaiter(this, void 0, Promise, function () {
         function resolve(t) {
-            return tslib_1.__awaiter(this, void 0, void 0, function () {
+            return tslib_1.__awaiter(this, void 0, Promise, function () {
                 var c, r, record, valPromise, val;
                 return tslib_1.__generator(this, function (_a) {
                     switch (_a.label) {
@@ -101,7 +101,7 @@ function resolveMinimalAsync(token, parent) {
                             val = _a.sent();
                             // Update cache with value if desired, or leave promise. Leaving promise is standard for simple async caches to avoid race conditions.
                             // However, for active tracking we need the instance.
-                            if (val && typeof val === 'object' && ((0, instantiator_1.isDisposable)(val) || record.flags === 268435456 /* RecordFlags.Private */)) {
+                            if (val && typeof val === 'object' && ((0, instantiator_1.isDisposable)(val) || record.flags === metadata_1.RecordFlags.Private)) {
                                 active.push({ instance: val, token: t });
                             }
                             return [2 /*return*/, val];

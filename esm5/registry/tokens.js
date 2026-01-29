@@ -5,4 +5,5 @@
 import { InjectorToken } from "../metadata/index.js";
 export var INJECTOR = InjectorToken.get('INJECTOR');
 export var INJECTOR_SCOPE = InjectorToken.get('INJECTOR_SCOPE');
+export var INJECTOR_ENV = InjectorToken.get('INJECTOR_ENV');
 export var INTERCEPTORS = InjectorToken.get('INTERCEPTORS');

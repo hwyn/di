@@ -7,13 +7,117 @@ A lightweight, high-performance, and concurrency-safe Dependency Injection (DI) 
 
 Designed for developers who love **Java Spring / Angular style** dependency injection but want a **module-free**, pure DI experience.
 
-## ✨ Key Features
+## ✨ Key Capabilities (Highlights)
 
-- **🚀 Concurrency Safe**: Built-in `AsyncLocalStorage` support prevents context pollution in async/concurrent flows (Node.js).
-- **⚡️ High Performance**: AOT-like factory compilation and O(1) resolution algorithm.
-- **🛠 Zero Boilerplate**: No complex `Module` files or imports/exports. Just `@Injectable`, `@Inject`, and go.
-- **✨ Full Async Support**: Supports async factories, async initialization (`method returning Promise`), and mixed sync/async injection chains.
-- **🔌 AOP Support**: Lightweight Aspect-Oriented Programming capabilities via `MethodProxy`.
+### 1. 🛡️ Environment Awareness & Isolation
+
+The DI system uses a **Two-Phase Isolation Strategy** (Tagging vs. Filtering) to manage services across different environments (e.g., Micro-Frontends, Dev/Prod).
+
+#### Phase 1: Tagging (Global)
+You label services with an environment tag (`env`). This can be done manually per provider or valid automatically for a whole bundle.
+
+**Auto-Tagging (Micro-Frontends):**
+By setting `InstantiationPolicy.activeEnv` *synchronously* before importing a module, all services defined in that module will be "stamped" with that environment tag.
+
+> **⚠️ Warning:** `InstantiationPolicy.activeEnv` is a **global mutable state**.
+> Ensure module loading is synchronous or properly guarded. If you use async imports with `await`, be careful that other concurrent imports don't overwrite this value before your module finishes defining its services.
+
+```typescript
+import { InstantiationPolicy } from '@hwy-fm/di';
+
+// 1. Start Tagging
+InstantiationPolicy.activeEnv = 'marketing-app';
+
+// 2. Load Module (All @Injectable() inside will get env='marketing-app')
+// NOTE: Ensure this executes before changing activeEnv back
+const { MarketingModule } = await import('./marketing/module'); 
+
+// 3. Stop Tagging
+InstantiationPolicy.activeEnv = null;     
+```
+
+#### Phase 2: Filtering (Per-Injector)
+You define an **Admission Policy** to decide which tags are allowed in a specific Injector.
+
+**A. Define the Policy:**
+```typescript
+import { InstantiationPolicy, INJECTOR_ENV, InjectFlags } from '@hwy-fm/di';
+
+// Compare Provider's Tag vs Injector's Context
+InstantiationPolicy.globalAdmission = (token, provider, injector) => {
+  const allowedEnv = injector.get(INJECTOR_ENV, InjectFlags.Optional | InjectFlags.Self);
+  const targetEnv = (provider as any).env;
+
+  if (!allowedEnv) return true; // No restriction
+  if (!targetEnv) return true;  // Shared/Common service
+
+  return targetEnv === allowedEnv;
+};
+```
+
+**B. Create the Injector:**
+Bind `INJECTOR_ENV` to enforce the context.
+
+> **Tip:** Bind `INJECTOR_ENV` in your **Root Injector**. Since child injectors inherit configuration, this effectively sets the strategy for the entire application.
+
+```typescript
+import { Injector, INJECTOR_ENV, INJECTOR_SCOPE, ROOT_SCOPE } from '@hwy-fm/di';
+
+const rootInjector = Injector.create([
+  { provide: INJECTOR_SCOPE, useValue: ROOT_SCOPE },
+  { provide: INJECTOR_ENV, useValue: 'marketing-app' }, // Applies to this injector AND all children
+  ...MarketingModule.providers
+]);
+```
+
+### 2. 🚀 Async Governance (Transactional Rollback)
+
+The DI engine treats complex dependency graphs as **transactions**.
+
+- **Automatic Rollback**: If you resolve a tree of async services (A -> B -> C), and 'C' fails to initialize, the engine automatically **disposes** of the successfully created 'B' instance.
+- **Shared Protection**: Singletons reused from parent injectors or `useExisting` are protected from accidental disposal during rollback.
+
+```typescript
+@Injectable()
+class Connection {
+  // If this fails...
+  async onInit() { 
+    throw new Error('Connection failed'); 
+  }
+}
+
+@Injectable()
+class Service {
+  // This service (already created) will be automatically destroyed
+  constructor(private info: InfoService) {}
+}
+
+const injector = Injector.create([Connection, Service, InfoService]);
+// The entire resolution fails, and InfoService is safely disposed.
+try {
+  await injector.getAsync(Connection);
+} catch (e) {
+  // Rollback complete
+}
+```
+
+### 3. 🪝 The "Open Kernel" (Metadata Hooks)
+
+A powerful metaprogramming API that lets you intercept and rewrite the DI engine's internal behavior for specific tokens.
+
+```typescript
+import { HookMetadata } from '@hwy-fm/di';
+
+// Intercept creation logic (AOP / Mocking)
+HookMetadata.hook(MyService, {
+  customFactory: (record, next) => {
+    console.log('Intercepting creation...');
+    return next(); 
+  },
+  // Dynamic Scoping Control
+  onScopeCheck: (def, scope) => scope === 'root'
+});
+```
 
 ---
 
@@ -36,296 +140,162 @@ Make sure to enable decorators in your `tsconfig.json`:
 
 ---
 
-## 🚀 Quick Start
+## 📚 Core Concepts
 
-### 1. Define Services
-
-Use `@Injectable()` to declare a class as a service.
+### 1. Basic Usage
 
 ```typescript
-import { Injectable } from '@hwy-fm/di';
+import { Injectable, Inject, Injector, INJECTOR_SCOPE, ROOT_SCOPE } from '@hwy-fm/di';
 
+// 1. Define
 @Injectable()
-export class LoggerService {
-  log(msg: string) {
-    console.log(`[LOG]: ${msg}`);
-  }
+class ConfigService {
+  apiUrl = 'https://api.com';
 }
 
 @Injectable()
-export class UserService {
-  // Automatic constructor injection
-  constructor(private logger: LoggerService) {}
+class UserService {
+  // 2. Inject (Constructor Injection)
+  constructor(private config: ConfigService) {}
 
-  getUser() {
-    this.logger.log('Fetching user...');
-    return { name: 'Alice' };
-  }
+  getUrl() { return this.config.apiUrl; }
 }
+
+// 3. Create Injector (Must bind ROOT_SCOPE for global services)
+const injector = Injector.create([
+  { provide: INJECTOR_SCOPE, useValue: ROOT_SCOPE }
+]);
+
+// 4. Resolve
+const user = injector.get(UserService);
 ```
 
-### 2. Create Injector & Run
-
-Create a root injector and resolve dependencies.
+### 2. Provider Recipes
 
 ```typescript
-import { Injector } from '@hwy-fm/di';
-import { UserService } from './services';
+const providers = [
+  // Class Provider (Standard)
+  { provide: Logger, useClass: ConsoleLogger },
 
-const injector = Injector.create([]); // Root injector
+  // Value Provider (Config/Constants)
+  { provide: 'API_URL', useValue: 'https://api.com' },
 
-const userService = injector.get(UserService);
-const user = userService.getUser(); 
-// Output: [LOG]: Fetching user...
+  // Factory Provider (Dynamic Creation)
+  { 
+    provide: Database, 
+    useFactory: (cfg: Config) => new Database(cfg.host),
+    deps: [Config] 
+  },
+
+  // Existing Provider (Aliasing)
+  { provide: 'AliasedLogger', useExisting: Logger }
+];
+```
+
+### 3. Tokens & Interfaces
+
+Since TypeScript interfaces are erased at runtime, use `InjectorToken`.
+
+```typescript
+export const API_CONFIG = new InjectorToken<AppConfig>('API_CONFIG');
 ```
 
 ---
 
-## 💡 Advanced Usage
+## ⚙️ Feature Deep Dive
 
-### 1. Token Binding & Interfaces
+### 1. Scoping & Hierarchy
 
-Since TypeScript interfaces disappear at runtime, use `InjectorToken` for abstraction.
+Control *where* a service is created (Singleton vs Per-Injector).
 
-```typescript
-import { InjectorToken, Inject, Injectable } from '@hwy-fm/di';
-
-// Define a Token
-export const API_CONFIG = new InjectorToken<string>('API_CONFIG');
-
-@Injectable()
-class HttpService {
-  constructor(@Inject(API_CONFIG) private apiUrl: string) {}
-}
-
-// Bind Value in Injector
-const injector = Injector.create([
-  { provide: API_CONFIG, useValue: 'https://api.example.com' }
-]);
-```
-
-### 2. Async Factories & Initialization
-
-The container can handle asynchronous dependencies gracefully.
+- **`@Injectable()` (Default)**: Root Singleton. Shared globally across the entire app.
+- **`@Scope('any')`**: Per-Injector Singleton. A new instance is created for **each injector** logic that requests it, but shared within that injector.
+- **`@Scope('custom')`**: Restricted Singleton. Only visible and created in injectors specifically created with `{ scope: 'custom' }`.
 
 ```typescript
-const DB_CONNECTION = new InjectorToken('DB_CONNECTION');
-
-const injector = Injector.create([
-  {
-    provide: DB_CONNECTION,
-    useFactory: async () => {
-      const db = await connectToDatabase(); // Async operation
-      return db;
-    }
-  }
-]);
-
-// Use 'getAsync' to resolve async chains
-const db = await injector.getAsync(DB_CONNECTION);
-```
-
-### 3. Multi-Tokens (Plugin Style)
-
-Bind multiple implementations to a single token. Useful for plugins or event listeners.
-
-```typescript
-import { InjectorToken, MultiToken, Injectable } from '@hwy-fm/di';
-
-const PLUGIN_TOKEN = new InjectorToken('PLUGIN');
-
-@MultiToken(PLUGIN_TOKEN) // Bind this class to the multi-token
-@Injectable()
-class AuthPlugin { 
-    init() { console.log('Auth Plugin Loaded'); } 
-}
-
-@MultiToken(PLUGIN_TOKEN)
-@Injectable()
-class LoggerPlugin { 
-    init() { console.log('Logger Plugin Loaded'); } 
-}
-
-const injector = Injector.create([]);
-
-// Resolve all plugins as an array
-const plugins = injector.get(PLUGIN_TOKEN); 
-plugins.forEach(p => p.init());
-```
-
-### 4. Scoping & Resolution Strategies
-
-#### Singleton vs Transient
-
-You can control *where* the service is created and cached using the `providedIn` option.
-
-- **`'root'`** (Default): Singleton. Created once in the root injector and shared everywhere.
-- **`'any'`**: Transient-ish. Created in **every** injector that requests it. Useful for isolation.
-
-```typescript
-// Shared Singleton
-@Injectable() // Defaults to 'root' scope
-class SingletonService {}
-
-// New instance per Injector (e.g. per-request if using request-injectors)
+// Created once per injector (e.g., per-request or per-module)
 @Scope('any')
 @Injectable()
-class IsolatedService {}
+class RequestContext {}
 ```
 
-#### Property Injection
+### 2. Resolution Modifiers
 
-If you prefer not to clutter your constructor, you can inject properties directly.
-
-*Note: Constructor injection is generally recommended for better testing and immutability.*
-
-```typescript
-@Injectable()
-class ReportService {
-  @Inject(Logger)
-  private logger!: Logger; // Property injection
-
-  generate() {
-    this.logger.log('Generating report...');
-  }
-}
-```
-
-### 5. Hierarchical Injectors
-
-Injectors can be nested. A child injector can read from its parent, but can also override providers for its own scope. This is useful for component-trees or specific context isolation.
-
-```typescript
-class Config { port = 8080 }
-
-const parent = Injector.create([
-  { provide: Config, useValue: { port: 8080 } }
-]);
-
-const child = Injector.create([
-  { provide: Config, useValue: { port: 3000 } } // Override!
-], parent);
-
-console.log(parent.get(Config).port); // 8080
-console.log(child.get(Config).port);  // 3000
-```
-
-### 6. Resolution Modifiers
-
-Control how dependencies are resolved using decorators.
+Control *how* dependencies are resolved.
 
 ```typescript
 import { Optional, SkipSelf, Self } from '@hwy-fm/di';
 
-@Injectable()
-class Component {
-  constructor(
-    // 1. Optional: Don't throw if not found, just return null
-    @Optional() private optionalService: SpecialService,
+constructor(
+  // return null instead of throwing if missing
+  @Optional() private service?: MyService,
 
-    // 2. SkipSelf: Start looking from the PARENT injector (bypass local)
-    @SkipSelf() private parentConfig: Config,
+  // Start search from Parent Injector (skip local)
+  @SkipSelf() private parentConfig: Config,
 
-    // 3. Self: Only look in the CURRENT injector (don't look up validity)
-    @Self() private localData: LocalData
-  ) {}
-}
+  // Only search in Current Injector
+  @Self() private localData: LocalData
+) {}
 ```
 
-### 7. Circular Dependencies
+### 3. Lifecycle Hooks
 
-If `ServiceA` depends on `ServiceB` and `ServiceB` depends on `ServiceA`, use `forwardRef`.
+Services can hook into their lifecycle by implementing specific methods.
 
-```typescript
-import { forwardRef, Inject } from '@hwy-fm/di';
-
-@Injectable()
-class ServiceA {
-  // Use forwardRef to defer resolution of ServiceB
-  constructor(@Inject(forwardRef(() => ServiceB)) private b: ServiceB) {}
-}
-
-@Injectable()
-class ServiceB {
-  constructor(@Inject(forwardRef(() => ServiceA)) private a: ServiceA) {}
-}
-```
-
-### 8. Provider Recipes
-
-Different ways to define providers in `Injector.create([...])`.
+| Method | Description |
+| :--- | :--- |
+| **`onInit()`** | Called immediately after instantiation. Can return a `Promise`. |
+| **`destroy()`** | Called when `injector.destroy()` is invoked. |
 
 ```typescript
-const providers = [
-  // 1. Value Provider: constant values
-  { provide: 'API_URL', useValue: 'https://api.com' },
+@Injectable()
+class DatabaseService {
+  private connection: any;
 
-  // 2. Class Provider (Alias): 'Logger' token returns 'ConsoleLogger' instance
-  { provide: Logger, useClass: ConsoleLogger },
-
-  // 3. Existing Provider: Reuse an existing instance found by another token
-  { provide: 'AliasedLogger', useExisting: Logger },
-
-  // 4. Factory Provider: Dynamic creation with dependencies
-  { 
-    provide: Database, 
-    useFactory: (config: Config) => new Database(config.connectionString),
-    deps: [Config] 
+  // 1. Initialization (Sync or Async)
+  async onInit() {
+    this.connection = await createConnection();
+    console.log('DB Connected');
   }
-];
+
+  // 2. Cleanup
+  destroy() {
+    this.connection.close();
+    console.log('DB Closed');
+  }
+}
 ```
 
-### 9. Private Providers (Encapsulation)
+### 4. Concurrency & Context Isolation (Node.js)
 
-By default, child injectors can resolve dependencies from their parents. You can enforce boundaries by marking a provider as `private: true`. This makes it visible *only* to the injector it is registered in, effectively hiding it from children.
-
-```typescript
-const SECRET_TOKEN = new InjectorToken('SECRET');
-
-const parent = Injector.create([
-  // This provider is invisible to children
-  { provide: SECRET_TOKEN, useValue: 'top-secret', private: true }
-]);
-
-const child = Injector.create([], parent);
-
-console.log(parent.get(SECRET_TOKEN)); // 'top-secret'
-// child.get(SECRET_TOKEN); // Throws: No provider for SECRET
-```
-
----
-
-## 🔒 Concurrency & Context Isolation (Node.js)
-
-In high-concurrency Node.js applications (e.g., HTTP servers), global state is dangerous. This library uses `AsyncLocalStorage` to isolate dependency scopes per request.
+In high-concurrency Node.js applications, global state is dangerous. Use `AsyncLocalStorage` to isolate dependency scopes per request.
 
 ```typescript
-import { Injector, runInInjectionContext } from '@hwy-fm/di';
-import { Injectable, InjectorToken, Inject } from '@hwy-fm/di';
+import { Injector, runInInjectionContext, INJECTOR_SCOPE, Injectable, Scope, InjectorToken, Inject } from '@hwy-fm/di';
 
-const REQUEST_ID = new InjectorToken('REQUEST_ID');
+// 1. Define Request-Scoped Token & Service
+const REQUEST_ID = new InjectorToken<string>('REQUEST_ID');
 
+@Scope('request') // Only created in injectors with scope='request'
 @Injectable()
 class RequestHandler {
   constructor(@Inject(REQUEST_ID) private id: string) {}
-  
+
   process() {
     console.log(`Processing request: ${this.id}`);
   }
 }
 
-// Middleware or Controller
+// 2. Handle Request
 async function handleRequest(req, res) {
   const reqInjector = Injector.create([
+    { provide: INJECTOR_SCOPE, useValue: 'request' }, // Bind scope name
     { provide: REQUEST_ID, useValue: req.headers['x-request-id'] }
   ], rootInjector);
 
-  // Run all DI operations within this scope
+  // 3. Run in Context (ALS)
   await runInInjectionContext(reqInjector, async () => {
-     // Even if you await here, context is preserved
-     await someAsyncWork();
-     
-     // Correctly resolves the request-scoped dependencies
+     // Async work here preserves the active injector context
      const handler = reqInjector.get(RequestHandler);
      handler.process();
   });
@@ -334,831 +304,421 @@ async function handleRequest(req, res) {
 
 ---
 
-## 🛠 Decorators API
+## 🔥 Enterprise Patterns
 
-| Decorator | Target | Description |
-| :--- | :--- | :--- |
-| **`@Injectable(options?)`** | Class | Marks a class as available to the injector. Options: `{ providedIn: 'root' | 'any' }`. |
-| **`@Inject(token)`** | Constructor Param | Optimizes injection when Type metadata is insufficient (e.g., Interfaces or primitives). |
-| **`@Token(token)`** | Class | Binds a class to a specific `InjectorToken` (Single binding). |
-| **`@MultiToken(token)`** | Class | Binds a class to a specific `InjectorToken` (Array binding). |
-| **`@Optional()`** | Constructor Param | Does not throw if the dependency is not found; returns `null`. |
-| **`@Self()`** | Constructor Param | Only resolves from the local injector, never from the parent. |
-| **`@SkipSelf()`** | Constructor Param | Starts resolution from the parent injector. |
+### 1. Async Factories
 
+The DI container fully supports `async/await` in factories.
 
+```typescript
+{
+  provide: DB_CONNECTION,
+  useFactory: async () => {
+    const db = await connectToDatabase();
+    return db;
+  }
+}
+
+// ... later ...
+// Use getAsync for tokens that might be async
+const db = await injector.getAsync(DB_CONNECTION);
+```
+
+### 2. Standalone Bootstrapping (`resolveMinimal`)
+
+For usage *outside* a container (e.g., app startup), use `resolveMinimal`. It creates a temporary sandbox to resolve a dependency and returns a cleanup function.
+
+```typescript
+import { resolveMinimalAsync } from '@hwy-fm/di';
+
+const [loader, cleanup] = await resolveMinimalAsync(AppLoader);
+await loader.initialize();
+await cleanup(); // Dispose ephemeral instances
+```
+
+### 3. Global Admission Policy (The Gatekeeper)
+
+Centralize your DI security and configuration logic. This function runs **before** any provider is added to any injector.
+
+```typescript
+import { InstantiationPolicy } from '@hwy-fm/di';
+
+InstantiationPolicy.globalAdmission = (token, provider, injector) => {
+  // Scenario: Feature Flags
+  const meta = provider as any;
+  if (meta.featureFlag && !FeatureFlags.isEnabled(meta.featureFlag)) {
+    return false; // REJECT
+  }
+  return true;
+};
+```
+
+### 4. Global Service Registration
+
+Register providers without passing them to `Injector.create` manually.
+
+```typescript
+import { register, ROOT_SCOPE } from '@hwy-fm/di';
+
+// Register globally
+register({ provide: Logger, useClass: ConsoleLogger }, ROOT_SCOPE);
+```
+
+### 5. Multi-Providers (Plugins)
+
+Bind multiple services to a single token.
+
+```typescript
+const PLUGINS = new InjectorToken('PLUGINS');
+
+@MultiToken(PLUGINS)
+class AuthPlugin {}
+
+@MultiToken(PLUGINS)
+class LoggerPlugin {}
+
+// Returns array: [AuthPlugin, LoggerPlugin]
+const plugins = injector.get(PLUGINS); 
+```
+
+### 6. Global Interception (The Middleware)
+
+You can define a global interception strategy that runs for **every** service created by an injector. This is perfect for logging, metrics, or auditing.
+
+```typescript
+import { INTERCEPTORS, Injector } from '@hwy-fm/di';
+
+const injector = Injector.create([
+  {
+    provide: INTERCEPTORS,
+    useValue: (instance, token) => {
+      console.log(`[Audit] Created instance of: ${token.name}`);
+      return instance; 
+    },
+    multi: true
+  }
+]);
+```
+
+### 7. Private Providers & Visibility
+
+Enforce strict encapsulation. A `private` provider is visible to the injector where it is defined, but **hidden** from children.
+
+```typescript
+const parent = Injector.create([
+  { provide: SecretService, useClass: SecretService, private: true }
+]);
+
+const child = Injector.create([], parent);
+parent.get(SecretService); // OK
+child.get(SecretService); // Error: Not visible
+```
 
 ---
 
-## 🎣 Lifecycle & Hooks
+## 🔌 Metaprogramming & AOP
 
-### 1. Instance Lifecycle Methods
+### 1. Aspect-Oriented Programming (Method Proxy)
 
-The simplest way to hook into the lifecycle is implementing methods on your service class.
-
-| Method | Description |
-| :--- | :--- |
-| **`onInit()`** | Called immediately after dependencies are resolved and the instance is created. Can return a `Promise` for async initialization. |
-| **`destroy()`** | Called when `injector.destroy()` is invoked. Used for cleanup. |
+Automatically wrap methods with interceptors using `MethodProxy`.
 
 ```typescript
-@Injectable()
-class DatabaseService {
-  async onInit() {
-    console.log('Connecting to DB...');
-    await this.connect();
-    console.log('Connected!'); // System waits for this if using getAsync
-  }
-  
-  destroy() {
-    console.log('Closing DB connection...');
-    this.disconnect();
-  }
-}
-```
+import { MethodProxy, HookMetadata } from '@hwy-fm/di';
 
-### 2. Advanced Container Hooks
-
-For advanced control (e.g., monitoring, policy enforcement), you can attach hooks to **Tokens** directly using `HookMetadata`. These run at the **container level** during the resolution process.
-
-```typescript
-import { HookMetadata, InjectorToken, Injectable, Injector } from '@hwy-fm/di';
-
-const MY_TOKEN = new InjectorToken('RESTRICTED_TOKEN');
-
-// 1. Attach hooks to the token
-HookMetadata.hook(MY_TOKEN, {
-  // onAllow: Decide if a provider is allowed to be registered or resolved
-  // Context is available! You can check parent injector status.
-  onAllow: (token, provider, context) => {
-    // E.g. block if not in a specific scope structure or based on other services
-    return true; 
-  },
-
-  // before: Run before instantiation
-  before: (token, record, context) => {
-    console.time(`Instantiation-${token}`);
-  },
-
-  // after: Run after instantiation
-  after: (instance, token, context) => {
-    console.timeEnd(`Instantiation-${token}`);
-    console.log('Created instance:', instance);
-  },
-
-  // onError: Handle instantiation errors (e.g., fallback)
-  onError: (error, token, context) => {
-    console.error('Failed to create:', token);
-    return { fallback: 'value' }; // Return backup value
-  }
-});
-
-@Injectable()
-class MyService {}
-
-// Bind it normally
-const injector = Injector.create([{ provide: MY_TOKEN, useClass: MyService }]);
-
-// Trigger hooks
-injector.get(MY_TOKEN);
-```
-
-### 3. Custom Factory Interception
-
-You can completely replace the instantiation logic for a specific token using the `customFactory` hook. This acts as a middleware for object creation, useful for AOP proxies.
-
-```typescript
-HookMetadata.hook(UserService, {
-  customFactory: (record, next, context) => {
-    // context: The current Injector instance
-    console.log('Before creation');
-    const instance = next(); // Proceed with original factory
-    console.log('After creation');
-    // You can wrap/proxy the instance here
+HookMetadata.hook(Service, {
+  after: (instance, token, injector) => {
+    injector.get(MethodProxy).proxyMethod(instance, 'sensitiveMethod');
     return instance;
   }
 });
 ```
 
----
+### 2. Custom Decorators
 
-## 🧪 Testing
+Create your own semantic decorators.
 
-Testing is simple: create an injector with mocks for your dependencies.
-
-```typescript
-const injector = Injector.create([
-  { provide: ApiService, useValue: mockApiService }, // Mock logic
-  { provide: UserService, useClass: UserService }    // Real logic
-]);
-
-const user = await injector.get(UserService).fetchUser(1);
-expect(user.name).toBe('Test User');
-```
-
-For isolated unit tests without a full injector, use `resolveMinimal` (or `resolveMinimalAsync`) to act as a temporary sandbox. You can optionally pass a parent injector to provide mocks.
-
-```typescript
-// 1. Create mocks
-const parent = Injector.create([{ provide: Database, useValue: mockDb }]);
-
-// 2. Resolve target in a standalone sandbox (inheriting mocks)
-const [service, cleanup] = resolveMinimal(UserService, parent);
-
-expect(service).toBeDefined();
-
-// 3. Cleanup ephemeral instances
-cleanup();
-```
-
----
-
-## 🔌 Extensibility & Framework Integration
-
-This library is designed to be the foundation of larger frameworks. Here are patterns for extending its capabilities.
-
-### 1. Custom Class Decorators (Meta-programming)
-
-You can create semantic decorators (like `@Controller`, `@Repository`) that automatically register classes or attach metadata.
+**Class Decorators:**
 
 ```typescript
 import { makeDecorator, setInjectableDef } from '@hwy-fm/di';
 
-// Create a decorator that:
-// 1. Takes 'path' metadata
-// 2. Automatically marks the class as @Injectable
 export const Controller = makeDecorator(
-  'Controller',
-  (path: string) => ({ path }), 
-  (cls, meta) => {
-    setInjectableDef(cls, { providedIn: 'root' });
-    // Global router registry example
-    RouterRegistry.register(meta.path, cls);
-  }
-);
-
-// Usage
-@Controller('/api/users')
-class UserController {} 
-```
-
-### 2. Custom Parameter Decorators
-
-Create shorthand decorators for specific injection patterns.
-
-```typescript
-import { makeParamDecorator, Inject } from '@hwy-fm/di';
-
-const CONFIG = new InjectorToken('APP_CONFIG');
-
-// Create @InjectConfig(key) -> wraps @Inject(CONFIG) + transform
-export const InjectConfig = makeParamDecorator(
-  'InjectConfig',
-  (key: string) => ({ key }),
-  (cls, unused, index) => {
-    // Manually push injection logic or use existing @Inject under the hood
-    // (Advanced implementation omitted for brevity)
-  }
+  'Controller', 
+  (path: string) => ({ path }),
+  (cls) => setInjectableDef(cls, { scope: 'root' })
 );
 ```
 
-### 3. Data Transformation with Decorators
+**Parameter Decorators (With Data Transformation):**
 
-You can create decorators that transform the injected value before it reaches the constructor. This is powerful for normalizing config or validation.
+Use `markInject` to connect a custom decorator to the DI system, allowing you to define injection tokens and transformation logic simultaneously.
 
 ```typescript
-import { makeParamDecorator } from '@hwy-fm/di';
+import { makeParamDecorator, markInject, DecoratorFlags, InjectorToken } from '@hwy-fm/di';
 
-// Create a decorator with a 'transform' function
-export const EnvVar = makeParamDecorator(
-  'EnvVar',
-  (key: string) => ({ 
-    token: process.env, // Inject the whole env object
-    transform: (value, meta) => value[meta.key] || 'DEFAULT' // Pick and fallback
-  })
+const APPLICATION_METADATA = new InjectorToken('APP_META');
+
+// Helper to extract value from metadata object
+const transform = (key: string) => (value: any) => value?.[key];
+
+// Define @Input(key)
+// 1. Injects APPLICATION_METADATA
+// 2. Extracts the specific 'key' from the resolved object
+export const Input = markInject(
+  makeParamDecorator(
+    'InputParamDecorator', 
+    (key: string) => ({ 
+      token: APPLICATION_METADATA, 
+      transform: transform(key) 
+    })
+  ), 
+  DecoratorFlags.Inject
 );
 
-@Injectable()
-class ConfigService {
-  constructor(@EnvVar('PORT') public port: string) {
-    console.log(this.port); // Output: '3000' or 'DEFAULT'
-  }
-}
+// Usage: constructor(@Input('theme') theme: string)
 ```
 
-### 4. Custom Property & Method Decorators
+### 3. Hook Metadata API Reference
 
-You're not limited to classes and parameters.
+| Hook | Type | Description |
+| :--- | :--- | :--- |
+| **`onTransientCheck`** | `boolean \| (token, record, ctx) => boolean` | **Forces** transient behavior. If `true`, the instance is **never cached** and **never tracked** for disposal. |
+| **`onScopeCheck`** | `(def, scope, ctx) => boolean` | Custom logic to match the provider against the injector's scope. |
+| **`customFactory`** | `(record, next, ctx) => any` | Intercept creation. Call `next()` to run the original factory. |
+| **`onAllow`** | `(token, provider, ctx) => boolean` | Admission control. Return `false` to prevent the provider from being used. |
+| **`before`** | `(token, record, ctx) => void` | Runs before instantiation begins. |
+| **`after`** | `(instance, token, ctx) => void` | Runs after instantiation. Useful for property injection or proxies. |
+| **`onError`** | `(error, token, ctx) => any` | Catch creation errors. Return a fallback value or rethrow. |
+| **`onDispose`** | `(instance, ctx) => void` | Custom cleanup logic when the injector is destroyed. |
 
-```typescript
-import { makePropDecorator, makeMethodDecorator } from '@hwy-fm/di';
-
-// Property Decorator
-const Value = makePropDecorator('Value', (val: any) => ({ value: val }));
-
-// Method Decorator
-const Log = makeMethodDecorator('Log', () => ({}));
-
-class Example {
-  @Value(42) 
-  count: number;
-
-  @Log()
-  save() { /* ... */ }
-}
-```
-
-### 5. Global Instance Interceptors
-
-Use the `INTERCEPTORS` multi-token to wrap or modify *every* instance created by the container. This is the entry point for implementing global AOP, Profiling, or Proxies.
-
-```typescript
-import { INTERCEPTORS, Injector } from '@hwy-fm/di';
-
-const Profiler = (instance: any, token: any) => {
-  if (typeof instance.handle === 'function') {
-    // A simple proxy pattern
-    const original = instance.handle.bind(instance);
-    instance.handle = (...args) => {
-      console.time(token.name);
-      const res = original(...args);
-      console.timeEnd(token.name);
-      return res;
-    };
-  }
-  return instance;
-};
-
-const injector = Injector.create([
-  { provide: INTERCEPTORS, useValue: Profiler, multi: true }
-]);
-```
-
-
-
-
----
-
-## 🛡 Strict Mode & Policies
-
-For large teams, you can enforce stricter rules to prevent common mistakes (like memory leaks or ambiguous resolutions).
-
-```typescript
-import { InstantiationPolicy } from '@hwy-fm/di';
-
-// 1. Strict Async Lifecycle
-// Throws if a service has an async `onInit()` but is instantiated by a synchronous chain.
-// Prevents use of uninitialized services.
-InstantiationPolicy.strictAsyncLifecycle = true; 
-
-// 2. Strict Multi-Injection
-// Throws if you try to add a provider to a MultiToken AFTER it has already been resolved.
-// Prevents "missing plugin" bugs.
-InstantiationPolicy.strictMultiInjection = true;
-```
+> **⚠️ Pure Transient Warning:**
+> Services using `onTransientCheck` (Pure Transient) are **NOT** tracked by the injector for disposal.
+> Their `destroy()` method will **NEVER** be called automatically.
+>
+> *Note: Services with `@Scope('any')` ARE tracked. They behave as "Per-Injector Singletons" (one instance per injector) and will be disposed when that specific injector is destroyed.*
 
 ---
 
 ## 🍳 Recipes & Patterns
 
-### 1. Lazy Loading / Code Splitting
+**1. Virtual Modules (Zero-Boilerplate)**
 
-You can delay loading heavy dependencies (like massive PDF libraries) until they are actually needed using async factories and dynamic imports.
-
-```typescript
-const PDF_SERVICE = new InjectorToken('PDF_SERVICE');
-
-const injector = Injector.create([
-  {
-    provide: PDF_SERVICE,
-    useFactory: async () => {
-      // Only downloads/loads the file when getAsync is called
-      const { PdfServiceImpl } = await import('./services/heavy-pdf.service');
-      return new PdfServiceImpl();
-    }
-  }
-]);
-
-// ... later in your code
-const pdfService = await injector.getAsync(PDF_SERVICE);
-```
-
-### 2. Express.js Middleware Integration
-
-Here is a drop-in middleware pattern for Express apps to ensure every request has its own isolated DI scope.
+Organize code using simple arrays. No complex Module classes required.
 
 ```typescript
-import { Injector, runInInjectionContext, Inject, Injectable, InjectorToken } from '@hwy-fm/di';
+// features/auth.ts
+export const AUTH_PROVIDERS = [ AuthService, JwtStrategy ];
 
-// Context Tokens
-const REQ = new InjectorToken('EXPRESS_REQ');
-const RES = new InjectorToken('EXPRESS_RES');
-
-// Middleware
-export const diMiddleware = (rootInjector: Injector) => {
-  return (req, res, next) => {
-    // 1. Create a child injector for this request
-    const reqInjector = Injector.create([
-      { provide: REQ, useValue: req },
-      { provide: RES, useValue: res }
-    ], rootInjector);
-
-    // 2. Run the rest of the request chain inside the DI context
-    runInInjectionContext(reqInjector, async () => {
-      // Create a transient instance of controller for THIS request
-      // Note: Controller must be provided in 'any' scope or manually resolved from reqInjector
-      const controller = reqInjector.get(UserController);
-      await controller.handle(req, res);
-    });
-  };
-};
-
-// Usage with Controller
-// IMPORTANT: '@Scope('any')' ensures a new instance is created for every request (Injector)
-@Scope('any')
-@Injectable() 
-class UserController {
-  constructor(@Inject(REQ) private req: any) {}
-  
-  async handle(req, res) {
-    res.json({ user: this.req.user, id: this.req.id });
-  }
-}
-```
-
-### 3. Client-Side (React) Integration
-
-Use the DI container to manage business logic and state outside of your React components (ViewModel pattern).
-
-**1. Create a `useService` Hook**
-
-```typescript
-import React, { useContext, useMemo, createContext } from 'react';
-import { Injector, Type } from '@hwy-fm/di';
-
-// --- Integration Layer ---
-
-const DIContext = createContext<Injector | null>(null);
-
-export const DIProvider = ({ providers, children }: { providers: any[], children: any }) => {
-  // Create the injector only once
-  const injector = useMemo(() => Injector.create(providers), []);
-  
-  return <DIContext.Provider value={injector}>{children}</DIContext.Provider>;
-};
-
-export function useService<T>(token: Type<T> | any): T {
-  const injector = useContext(DIContext);
-  if (!injector) throw new Error('Injector not found. Wrap your app in <DIProvider>');
-  return injector.get(token);
-}
-
-// Optional: HOC for class components
-export function withService<T>(token: Type<T>, propName: string = 'service') {
-  return (Component: any) => (props: any) => {
-    const service = useService(token);
-    return <Component {...props} {...{ [propName]: service }} />;
-  };
-}
-```
-
-**2. Use in Components**
-
-Move logic out of `useEffect` and into Services.
-
-```typescript
-// --- Business Logic (Framework Agnostic) ---
-@Injectable()
-class CounterService {
-  count = 0; // Or use MobX/RxJS here
-  
-  increment() { 
-     this.count++;
-     // emit change event...
-  }
-}
-
-// --- View Layer (React) ---
-const App = () => (
-  // Root of the specific feature module
-  <DIProvider providers={[{ provide: CounterService, useClass: CounterService }]}>
-    <Counter />
-  </DIProvider>
-);
-
-const Counter = () => {
-  const service = useService(CounterService); // Dependency Injection!
-  
-  return (
-    <button onClick={() => service.increment()}>
-      Action from Service
-    </button>
-  );
-};
-```
-
-### 4. Conditional Registration
-
-#### A. Static Environment (Process Env)
-
-For static conditions (like `NODE_ENV`) where no injector context is needed, use `onAllow`.
-
-```typescript
-HookMetadata.hook(DEV_TOOLS, {
-  // Although context is passed, we might not need it for simple env checks
-  onAllow: () => process.env.NODE_ENV === 'development'
-});
-```
-
-#### B. Context-Aware Conditions
-
-Since `onAllow` receives the `Injector` context, you can now check conditions based on the injector state or parent hierarchy.
-
-```typescript
-HookMetadata.hook(MY_FEATURE, {
-  onAllow: (token, provider, injector) => {
-    // Only allow if we are inside a child injector (have a parent)
-    return !!injector.parent;
-  }
-});
-```
-
-#### C. Configuration-Based (Runtime Factory)
-
-If your condition depends on a *resolved service* (like a loaded Config object), use a **Factory Provider**.
-
-```typescript
-@Injectable()
-class ConfigService {
-  features = { enableNewUI: true }; // Loaded from config.json
-}
-
-const FEATURE_SERVICE = new InjectorToken('FEATURE_SERVICE');
-
-const injector = Injector.create([
-  { provide: ConfigService, useClass: ConfigService },
-  {
-    provide: FEATURE_SERVICE,
-    // The factory can access ConfigService to make decisions
-    useFactory: (config: ConfigService) => {
-      if (config.features.enableNewUI) {
-        return new NewUIService();
-      }
-      return new LegacyUIService();
-    },
-    deps: [ConfigService]
-  }
+// app.ts
+const appInjector = Injector.create([
+  ...AUTH_PROVIDERS, // Just spread it!
+  AppService
 ]);
 ```
 
-### 5. Global Content Registry
+**2. Lazy Loading / Code Splitting**
 
-`TokenRegistry` is a high-performance global store for collecting data, configurations, or plugin points. It is useful for implementing "Contribution Points" (like VS Code extensions) where different parts of the app contribute to a central list.
-
-```typescript
-import { TokenRegistry } from '@hwy-fm/di';
-
-// 1. Define a Scope (e.g., a Menu System)
-const MENU_ITEMS = TokenRegistry.createScope<MenuItem>('MENU_ITEMS', { multi: true });
-
-interface MenuItem { label: string; action: string; }
-
-// 2. Register items from anywhere (no injector needed)
-TokenRegistry.register(MENU_ITEMS, { label: 'File', action: 'open' });
-TokenRegistry.register(MENU_ITEMS, [
-  { label: 'Edit', action: 'copy' },
-  { label: 'View', action: 'zoom' }
-]);
-
-// 3. Retrieve them later (Result is cached and frozen)
-const items = TokenRegistry.getAll(MENU_ITEMS);
-console.log(items); 
-// Output: [{label: 'File'...}, {label: 'Edit'...}, {label: 'View'...}]
-```
-
-### 6. Event Bus Pattern (Decoupled Communication)
-
-Use `MultiToken` to create a decentralized event bus where modules register handlers without centralized coupling.
+Load heavy dependencies only when requested.
 
 ```typescript
-import { InjectorToken, MultiToken, Inject, Injectable } from '@hwy-fm/di';
-
-interface EventHandler {
-  type: string;
-  handle(payload: any): void;
-}
-const EVENT_HANDLERS = new InjectorToken<EventHandler>('EVENT_HANDLERS');
-
-@Injectable()
-class EventBus {
-  private handlersMap = new Map<string, EventHandler[]>();
-
-  constructor(@Inject(EVENT_HANDLERS) handlers: EventHandler[]) {
-    handlers.forEach(h => {
-      const list = this.handlersMap.get(h.type) || [];
-      list.push(h);
-      this.handlersMap.set(h.type, list);
-    });
+{
+  provide: PDF_SERVICE,
+  useFactory: async () => {
+    const { PdfServiceImpl } = await import('./services/heavy-pdf');
+    return new PdfServiceImpl(); // loaded on demand
   }
-
-  emit(type: string, payload: any) {
-    this.handlersMap.get(type)?.forEach(h => h.handle(payload));
-  }
-}
-
-// Plugin: Register a handler
-@MultiToken(EVENT_HANDLERS)
-@Injectable()
-class UserCreatedHandler implements EventHandler {
-  type = 'USER_CREATED';
-  handle(user: any) { console.log('Welcome', user.name); }
 }
 ```
 
-### 7. Assisted Injection (Runtime Arguments)
+**3. Assisted Injection (Runtime Arguments)**
 
-Combine DI with runtime arguments by injecting a **Factory Function**.
+Combine DI with runtime parameters (like `userId`) using a Factory Function pattern.
 
 ```typescript
 type UserSessionFactory = (userId: string) => UserSession;
-const USER_SESSION_FACTORY = new InjectorToken<UserSessionFactory>('USER_SESSION_FACTORY');
-
-class UserSession {
-  constructor(private db: Database, private userId: string) {}
-}
 
 const providers = [
   {
-    provide: USER_SESSION_FACTORY,
-    // Inject 'Database' from DI, return function accepting 'userId'
+    provide: 'SESSION_FACTORY',
+    // Inject 'Database', return function accepting 'userId'
     useFactory: (db: Database) => (userId: string) => new UserSession(db, userId),
     deps: [Database]
   }
 ];
 
-@Injectable()
-class LoginController {
-  constructor(@Inject(USER_SESSION_FACTORY) private createSession: UserSessionFactory) {}
+// Usage: constructor(@Inject('SESSION_FACTORY') createSession: UserSessionFactory)
+// this.createSession('user-123') -> new UserSession(db, 'user-123')
+```
 
-  login(id: string) {
-    const session = this.createSession(id); // DI + Runtime args
-  }
+**4. Circular Dependencies**
+
+Use `forwardRef` to break cycles between interdependent services.
+
+```typescript
+import { forwardRef, Inject } from '@hwy-fm/di';
+
+class Parent {
+  constructor(@Inject(forwardRef(() => Child)) child: any) {}
+}
+
+class Child {
+  constructor(@Inject(forwardRef(() => Parent)) parent: any) {}
 }
 ```
 
-### 8. Service Fallback (Resiliency)
+**5. Express.js Middleware (Context Isolation)**
 
-Use `HookMetadata.onError` to automatically degrade gracefully when a service fails to initialize (e.g. network error).
+Ensure every request runs in its own isolated scope using `AsyncLocalStorage`.
 
 ```typescript
-import { HookMetadata } from '@hwy-fm/di';
+import { Injector, runInInjectionContext, InjectorToken } from '@hwy-fm/di';
 
-HookMetadata.hook(RemoteConfigService, {
-  onError: (error) => {
-    console.warn('RemoteConfig failed, using defaults.', error);
-    // Return a fallback value instead of throwing
-    return { fallback: new DefaultConfigService() };
-  }
-});
+const REQ = new InjectorToken('REQ');
+
+// Middleware
+const diMiddleware = (rootInjector: Injector) => (req, res, next) => {
+  const reqInjector = Injector.create([
+    { provide: REQ, useValue: req }
+  ], rootInjector);
+
+  runInInjectionContext(reqInjector, next);
+};
 ```
 
-### 9. Smart Context Logger
+**6. React Integration**
 
-Combine `AsyncLocalStorage` isolation with DI to create context-aware loggers that don't require passing `RequestID` manually.
+Provide dependency injection context to your React component tree.
 
-```typescript
-const REQUEST_CONTEXT = new InjectorToken('REQ_CTX'); // { traceId: string }
+```tsx
+const InjectorContext = createContext<Injector>(null!);
 
-@Injectable()
-class Logger {
-  constructor(@Inject(REQUEST_CONTEXT) @Optional() private ctx: any) {}
-  
-  info(msg: string) {
-    const traceId = this.ctx?.traceId || 'SYSTEM';
-    console.log(`[${traceId}] ${msg}`);
-  }
-}
-
-// In your request middleware:
-// Injector.create([{ provide: REQUEST_CONTEXT, useValue: { traceId: '123' } }], root);
+export const DIProvider = ({ providers, children }) => {
+  const injector = useMemo(() => Injector.create(providers), []);
+  return <DIContext.Provider value={injector}>{children}</DIContext.Provider>;
+};
 ```
 
-### 10. System Bootstrapping (Pre-Initialization)
+**7. Hot-Swappable Configuration**
 
-Use `resolveMinimal` as a bootstrapper to load configuration *before* creating the main application injector. This allows you to dynamically shape the providers based on runtime configuration.
-
-```typescript
-import { resolveMinimalAsync, Injector } from '@hwy-fm/di';
-
-@Injectable()
-class ConfigLoader {
-  async load() {
-    // Imagine fetching from a remote config server or reading .env
-    return { dbType: process.env.DB_TYPE || 'sql', debug: true };
-  }
-}
-
-async function bootstrap() {
-  // 1. Use a temporary sandbox to resolve the loader
-  // This creates a ConfigLoader instance, runs it, and essentially throws it away
-  const [loader, cleanup] = await resolveMinimalAsync(ConfigLoader);
-  
-  const config = await loader.load();
-  
-  // Clean up the temporary sandbox immediately
-  await cleanup(); 
-
-  // 2. Define providers dynamically based on the loaded config
-  const providers = [
-    { provide: 'APP_CONFIG', useValue: config },
-    config.dbType === 'sql' ? SqlDatabaseProvider : MongoDatabaseProvider
-  ];
-
-  // 3. Create the real, long-lived application injector
-  const appInjector = Injector.create(providers);
-  appInjector.get(Application).run();
-}
-```
-
-### 11. Virtual Modules (Zero-Boilerplate Grouping)
-
-You don't need complex `Module` classes to organize your code. Just export arrays of providers! This keeps your code flexible and tree-shakeable.
+Use `Proxy` to serve dynamic configuration that can change at runtime without restarting.
 
 ```typescript
-// features/auth/providers.ts
-export const AUTH_PROVIDERS = [
-  AuthService,
-  JwtStrategy,
-  { provide: 'AUTH_TIMEOUT', useValue: 3000 }
-];
-
-// features/db/providers.ts
-export const DB_PROVIDERS = [
-  DbConnection,
-  UserRepository
-];
-
-// app.ts
-const appInjector = Injector.create([
-  ...AUTH_PROVIDERS, // Spread syntax composes features
-  ...DB_PROVIDERS,
-  AppService
-]);
-```
-
-### 12. Isomorphic / Cross-Platform Architecture
-
-Write your business logic once, run it anywhere (Browser, Server, Electron). Abstract platform-specific APIs behind tokens.
-
-```typescript
-// 1. Definition (Interface + Token)
-interface Storage {
-  getItem(key: string): string | null;
-  setItem(key: string, val: string): void;
-}
-export const STORAGE = new InjectorToken<Storage>('STORAGE');
-
-// 2. Business Logic (Platform Agnostic)
-@Injectable()
-class AuthService {
-  constructor(@Inject(STORAGE) private storage: Storage) {}
-  
-  getToken() { return this.storage.getItem('jwt'); }
-}
-
-// 3. Browser Entry
-Injector.create([
-  { provide: STORAGE, useValue: localStorage } // Wrapper needed for type safety
-]);
-
-// 4. Server Entry (Node.js)
-class InMemoryStorage implements Storage { /* ... */ }
-Injector.create([
-  { provide: STORAGE, useClass: InMemoryStorage }
-]);
-```
-
-### 13. Migration Strategies (The Strangler Pattern)
-
-Migrating legacy services? Use aliasing to point old dependencies to new implementations without rewriting every file.
-
-```typescript
-@Injectable()
-class OldLogger { /* ... legacy code ... */ }
-
-@Injectable()
-class NewKibanaLogger { /* ... modern code ... */ }
-
-const injector = Injector.create([
-  // Register the new service
-  NewKibanaLogger,
-  
-  // Point the old token to the new implementation
-  // Any component asking for 'OldLogger' gets 'NewKibanaLogger' instance
-  { provide: OldLogger, useExisting: NewKibanaLogger }
-]);
-```
-
-### 14. Hot-Swappable Configuration (Live Updates)
-
-Use a `Proxy` in your factory to creating "live" config objects that react to changes without restarting the application.
-
-```typescript
-const APP_CONFIG = new InjectorToken('APP_CONFIG');
 let runtimeConfig = { theme: 'dark' };
 
 const injector = Injector.create([
   {
-    provide: APP_CONFIG,
-    useFactory: () => new Proxy({}, {
-      get: (_, prop) => runtimeConfig[prop] // Always reads latest value
-    })
+    provide: 'CONFIG',
+    // Always reads the latest value from runtimeConfig
+    useFactory: () => new Proxy({}, { get: (_, k) => runtimeConfig[k] })
   }
 ]);
-
-const config = injector.get(APP_CONFIG);
-console.log(config.theme); // 'dark'
-
-runtimeConfig.theme = 'light';
-console.log(config.theme); // 'light' (Updated automatically)
 ```
 
-### 15. Request-Scoped Caching
+**8. Global Content Registry (Plugin Architecture)**
 
-Leverage `providedIn: 'any'` and `runInInjectionContext` to create a cache that lives only as long as the HTTP request.
+Use `TokenRegistry` to create global "Contribution Points" (like VS Code Extensions) without needing an Injector context.
 
 ```typescript
-@Scope('any') // Created new for every Injector (Request)
-@Injectable()
-class RequestQueryCache {
-  private cache = new Map();
+import { TokenRegistry } from '@hwy-fm/di';
 
-  get(query: string) { return this.cache.get(query); }
-  set(query: string, result: any) { this.cache.set(query, result); }
-}
+// 1. Define a Contribution Point
+const MENU_ITEMS = TokenRegistry.createScope('MENU_ITEMS', { multi: true });
 
-// In your service
-@Injectable()
-class SearchService {
-  constructor(private cache: RequestQueryCache) {}
+// 2. Register items from anywhere (e.g., in other files)
+TokenRegistry.register(MENU_ITEMS, { label: 'File' });
+TokenRegistry.register(MENU_ITEMS, { label: 'Edit' });
 
-  async search(query: string) {
-    if (this.cache.get(query)) return this.cache.get(query);
-    
-    const result = await db.find(query);
-    this.cache.set(query, result); // Cached only for this request!
-    return result;
-  }
-}
+// 3. Retrieve all registered items
+const menus = TokenRegistry.getAll(MENU_ITEMS); 
 ```
 
-### 16. Method Parameter Injection (Experimental)
+---
 
-Use the built-in `MethodProxy` to enable dependency injection directly into method arguments, not just constructors.
+## 🧪 Testing & Mocking
+
+Writing unit tests with `@hwy-fm/di` is straightforward. You can easily override providers with mocks.
+
+### 1. Unit Testing Services
 
 ```typescript
-import { MethodProxy } from '@hwy-fm/di';
+import { Injector } from '@hwy-fm/di';
 
-@Injectable()
-class CommandHandler {
-  // 1. Define method with dependencies
-  run(@Inject(User) user?: User, @Inject(Config) config?: Config) {
-    console.log(`Running for ${user.name}`);
-  }
+// Real Service
+class DatabaseService { 
+  connect() { /* real connection */ } 
 }
 
-// 2. Wire it up (e.g. via an Interceptor or Helper)
-HookMetadata.hook(CommandHandler, {
-  after: (instance, token, injector) => {
-    // Automatically wraps methods to inject parameters from the injector
-    injector.get(MethodProxy).proxyMethod(instance, 'run');
-    return instance;
-  }
+// Mock
+const mockDb = { connect: jest.fn() };
+
+test('UserService should use mock DB', () => {
+  const injector = Injector.create([
+    UserService,
+    // Override with Mock
+    { provide: DatabaseService, useValue: mockDb }
+  ]);
+
+  const user = injector.get(UserService);
+  user.doWork();
+  
+  expect(mockDb.connect).toHaveBeenCalled();
+});
+```
+
+### 2. Testing Logic outside Container (`resolveMinimal`)
+
+For isolated logic tests without setting up a full injector hierarchy.
+
+```typescript
+import { resolveMinimal } from '@hwy-fm/di';
+
+test('Isolated logic', async () => {
+  const [service, dispose] = resolveMinimal(ComplexService);
+  // ... test service ...
+  dispose();
 });
 ```
 
 ---
 
-## 🐞 Troubleshooting
+## 🛡 Strict Mode & Troubleshooting
 
-If injection isn't working as expected, you can enable verbose internal logging.
+**Enable Strict Mode:**
+```typescript
+import { InstantiationPolicy } from '@hwy-fm/di';
+InstantiationPolicy.strictAsyncLifecycle = true; 
+InstantiationPolicy.strictMultiInjection = true;
+```
 
+**Debug Logging:**
 ```typescript
 import { DEBUG_MODE } from '@hwy-fm/di';
-
-// Enable detailed logs for resolution, instantiation, and context switches
 DEBUG_MODE.enabled = true;
 ```
 
 ---
 
-## ⚡️ Performance & Architecture
+## ⚡ Performance
 
-This library is engineered for speed and low memory footprint.
+- **Pre-compiled Factories**: Optimized for V8.
+- **O(1) Resolution**: Map-based lookups.
+- **No Class Scanning**: Explicit exports only.
 
-- **Pre-compiled Factories**: Unlike many reflection-heavy libraries, dependency resolution logic is compiled into a closure factory upon first access (`strategy.ts`). Subsequent access is practically just a function call.
-- **O(1) Resolution**: Using `Map`-based registries ensures constant time complexity for dependency lookups, regardless of graph size.
-- **No Class Scanning**: We do not scan the file system. You explicitly control what gets loaded by what you pass to `Injector.create([...])` or what strict dependencies you request.
+---
+
+## 🛠 Decorators API
+
+| Decorator | Target | Description |
+| :--- | :--- | :--- |
+| **`@Injectable(options?)`** | Class | Marks a class as available to the injector. Options: `{ scope: 'root' }`. |
+| **`@Inject(token)`** | Constructor Param | Optimizes injection when Type metadata is insufficient. |
+| **`@Token(token)`** | Class | Single binding to a token. |
+| **`@MultiToken(token)`** | Class | Multi binding to a token. |
+| **`@Optional()`** | Constructor Param | Returns `null` if not found. |
+| **`@Self()`** | Constructor Param | Only resolves from local injector. |
+| **`@SkipSelf()`** | Constructor Param | Starts resolution from parent injector. |
+
+---
 
 ## 📄 License
 

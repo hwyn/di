@@ -4,10 +4,10 @@
  */
 import { __awaiter } from "tslib";
 import { HookMetadata } from "../registry/index.js";
+import { ResolveMode } from "../metadata/index.js";
 import { debugLog as log, InstantiationPolicy, DEBUG_MODE } from "../common/index.js";
 import { runAfter, runAfterAsync, runBefore, runBeforeAsync, runError } from "./standard-hook.js";
 import { guardCyclicDependency } from "./cyclic.js";
-import { ResolveMode } from "./prop-resolution.js";
 function getTokenName(token) {
     return token.name || (typeof token === 'string' ? token : token.toString());
 }

@@ -4,7 +4,7 @@
  */
 import { __awaiter, __generator, __read, __values } from "tslib";
 import { getInjector, Injector, INJECTOR, INJECTOR_SCOPE, runInInjectionContext, INTERCEPTORS } from "../registry/index.js";
-import { NO_VALUE } from "../metadata/index.js";
+import { InjectFlags, NO_VALUE, RecordFlags } from "../metadata/index.js";
 import { deepForEach, debugLog as log, DEBUG_MODE, enhanceError, InstantiationPolicy } from "../common/index.js";
 import { dispose, instantiate, instantiateAsync, isDisposable } from "./instantiator.js";
 import { makeRecord, resolveMulti, composeInterceptors, resolveDefinition, resolveMultiAsync } from "./strategy.js";
@@ -12,6 +12,7 @@ import { AsyncGovernance } from "./async-governance.js";
 import { onTransientCheck, onDispose, onAdmission } from "./standard-hook.js";
 import { checkNoProvider, checkSelfAndOptional, validateResolution, validateSkipSelf } from "./resolution-checks.js";
 import { ContextualInjector } from "./contextual-injector.js";
+export { InjectFlags } from "../metadata/index.js";
 export function deepProviders(injector, providers) {
     deepForEach(providers, function (item) {
         var _a;
@@ -28,10 +29,9 @@ var StaticInjector = /** @class */ (function () {
         this.interceptStrategy = null;
         this.parent = parent;
         deepProviders(this, additionalProviders);
-        var scopeFlags = this.parent ? 1 /* InjectFlags.Optional */ | 2 /* InjectFlags.Self */ : 2 /* InjectFlags.Self */;
         this.records.set(INJECTOR, makeRecord(function () { return _this; }, this));
-        this.scope = this.get(INJECTOR_SCOPE, scopeFlags);
-        var localInterceptors = this.get(INTERCEPTORS, 1 /* InjectFlags.Optional */ | 2 /* InjectFlags.Self */);
+        this.scope = this.get(INJECTOR_SCOPE, InjectFlags.Optional | InjectFlags.Self);
+        var localInterceptors = this.get(INTERCEPTORS, InjectFlags.Optional | InjectFlags.Self);
         var parentStrategy = (_b = (_a = this.parent) === null || _a === void 0 ? void 0 : _a.interceptStrategy) !== null && _b !== void 0 ? _b : null;
         this.interceptStrategy = composeInterceptors(localInterceptors, parentStrategy, this);
     }
@@ -42,7 +42,7 @@ var StaticInjector = /** @class */ (function () {
     });
     StaticInjector.prototype.get = function (token, flags) {
         var _this = this;
-        if (flags === void 0) { flags = 0 /* InjectFlags.Default */; }
+        if (flags === void 0) { flags = InjectFlags.Default; }
         DEBUG_MODE.enabled && log('get', token.name || token);
         var _a = this.resolveBoundaryOrCache(token, flags, function (p, f) { return p.get(token, f); }), value = _a.value, record = _a.record;
         if (value !== NO_VALUE)
@@ -65,10 +65,10 @@ var StaticInjector = /** @class */ (function () {
         });
     };
     StaticInjector.prototype.getAsync = function (token_1) {
-        return __awaiter(this, arguments, void 0, function (token, flags, resolutionStack) {
+        return __awaiter(this, arguments, Promise, function (token, flags, resolutionStack) {
             var _a, value, record, prev, ctx;
             var _this = this;
-            if (flags === void 0) { flags = 0 /* InjectFlags.Default */; }
+            if (flags === void 0) { flags = InjectFlags.Default; }
             if (resolutionStack === void 0) { resolutionStack = new Set(); }
             return __generator(this, function (_b) {
                 DEBUG_MODE.enabled && log('getAsync', token.name || token);
@@ -141,14 +141,17 @@ var StaticInjector = /** @class */ (function () {
     StaticInjector.prototype.resolveBoundaryOrCache = function (token, flags, delegate) {
         if (this.isDestroyed)
             return { value: null, record: undefined };
-        if (flags & 4 /* InjectFlags.SkipSelf */) {
+        if (flags & InjectFlags.SkipSelf) {
             validateSkipSelf(flags);
             if (this.parent)
-                return { value: delegate(this.parent, flags & ~4 /* InjectFlags.SkipSelf */), record: undefined };
+                return { value: delegate(this.parent, flags & ~InjectFlags.SkipSelf), record: undefined };
             return { value: checkNoProvider(token, flags), record: undefined };
         }
         var record = this.records.get(token);
-        if (record && record.value !== NO_VALUE && !onTransientCheck(token, record, this)) {
+        if (record &&
+            record.value !== NO_VALUE &&
+            !((flags & RecordFlags.MaskFromChild) && (record.flags & RecordFlags.Private)) &&
+            !onTransientCheck(token, record, this)) {
             return { value: record.value, record: record };
         }
         return { value: NO_VALUE, record: record };
@@ -195,15 +198,15 @@ var StaticInjector = /** @class */ (function () {
     StaticInjector.prototype.tryParent = function (token, flags, record) {
         var _a;
         checkSelfAndOptional(token, flags, record);
-        return (_a = this.parent) === null || _a === void 0 ? void 0 : _a.get(token, flags | 134217728 /* RecordFlags.MaskFromChild */);
+        return (_a = this.parent) === null || _a === void 0 ? void 0 : _a.get(token, flags | RecordFlags.MaskFromChild);
     };
     StaticInjector.prototype.tryParentAsync = function (token, flags, record, stack) {
         var _a;
         checkSelfAndOptional(token, flags, record);
         if (this.parent instanceof StaticInjector && stack) {
-            return this.parent.getAsync(token, flags | 134217728 /* RecordFlags.MaskFromChild */, stack);
+            return this.parent.getAsync(token, flags | RecordFlags.MaskFromChild, stack);
         }
-        return (_a = this.parent) === null || _a === void 0 ? void 0 : _a.getAsync(token, flags | 134217728 /* RecordFlags.MaskFromChild */);
+        return (_a = this.parent) === null || _a === void 0 ? void 0 : _a.getAsync(token, flags | RecordFlags.MaskFromChild);
     };
     StaticInjector.prototype.tryResolve = function (token, record, flags) {
         record = this.resolveRecord(token, record);
@@ -212,7 +215,7 @@ var StaticInjector = /** @class */ (function () {
             return this.hydrateSync(token, record);
         if (this.parent)
             return this.tryParent(token, flags, record);
-        if (flags & 1 /* InjectFlags.Optional */)
+        if (flags & InjectFlags.Optional)
             return null;
         throw new Error("No provider for ".concat(token.name || token));
     };
@@ -226,7 +229,7 @@ var StaticInjector = /** @class */ (function () {
             var stack = ctx instanceof ContextualInjector ? ctx.stack : undefined;
             return this.tryParentAsync(token, flags, record, stack);
         }
-        if (flags & 1 /* InjectFlags.Optional */)
+        if (flags & InjectFlags.Optional)
             return null;
         throw new Error("No provider for ".concat(token.name || token));
     };
@@ -242,10 +245,13 @@ var StaticInjector = /** @class */ (function () {
     StaticInjector.prototype.hydrateSync = function (token, record) {
         AsyncGovernance.enforceLock(record, token.toString());
         var value = instantiate(token, record, this);
+        if (value instanceof Promise && !(record.provider && 'useValue' in record.provider)) {
+            AsyncGovernance.enforceSyncConstraint(token);
+        }
         return this.finishHydrate(token, record, value);
     };
     StaticInjector.prototype.hydrateAsync = function (token_1, record_2) {
-        return __awaiter(this, arguments, void 0, function (token, record, ctx) {
+        return __awaiter(this, arguments, Promise, function (token, record, ctx) {
             var worker, value, _a, _b, item;
             var e_3, _c;
             if (ctx === void 0) { ctx = this; }

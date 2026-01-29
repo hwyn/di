@@ -4,10 +4,10 @@
  */
 import { __awaiter, __generator } from "tslib";
 import { HookMetadata } from "../registry/index.js";
+import { ResolveMode } from "../metadata/index.js";
 import { debugLog as log, InstantiationPolicy, DEBUG_MODE } from "../common/index.js";
 import { runAfter, runAfterAsync, runBefore, runBeforeAsync, runError } from "./standard-hook.js";
 import { guardCyclicDependency } from "./cyclic.js";
-import { ResolveMode } from "./prop-resolution.js";
 function getTokenName(token) {
     return token.name || (typeof token === 'string' ? token : token.toString());
 }
@@ -101,7 +101,7 @@ function applyInterceptorSync(instance, token, ctx) {
     return result || instance;
 }
 export function instantiateAsync(token, record, ctx) {
-    return __awaiter(this, void 0, void 0, function () {
+    return __awaiter(this, void 0, Promise, function () {
         var instance;
         return __generator(this, function (_a) {
             switch (_a.label) {
@@ -114,7 +114,7 @@ export function instantiateAsync(token, record, ctx) {
     });
 }
 export function executeInstantiationAsync(token, record, ctx) {
-    return __awaiter(this, void 0, void 0, function () {
+    return __awaiter(this, void 0, Promise, function () {
         var metadata, instance_2, result, instance, baseFactory, effectiveFactory, e_1, result, e_2;
         var _this = this;
         var _a, _b, _c;
@@ -195,7 +195,7 @@ export function executeInstantiationAsync(token, record, ctx) {
     });
 }
 function applyInterceptorAsync(instance, token, ctx) {
-    return __awaiter(this, void 0, void 0, function () {
+    return __awaiter(this, void 0, Promise, function () {
         var strategy, result;
         return __generator(this, function (_a) {
             switch (_a.label) {

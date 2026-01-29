@@ -5,7 +5,7 @@
  */
 import { __awaiter } from "tslib";
 import { dispose, isDisposable } from "./instantiator.js";
-import { debugLog as log } from "../common/index.js";
+import { debugLog as log, InstantiationPolicy } from "../common/index.js";
 // Centralized governance for all asynchronous operations in the DI system.
 export class AsyncGovernance {
     static dispose(instance) {
@@ -58,7 +58,16 @@ export class AsyncGovernance {
             throw new Error(`Circular dependency or Race Condition: Token '${tokenName}' is currently being resolved asynchronously. Use 'getAsync' or await the parent resolution.`);
         }
     }
-    static secureMultiResolve(resolutions) {
+    static enforceSyncConstraint(token) {
+        var _a;
+        const name = token.name || token.toString();
+        const msg = `[DI] Warning: Synchronous resolution of token '${name}' resulted in an async Promise. Ensure all dependencies are synchronous or use 'getAsync'.`;
+        if (InstantiationPolicy.strictAsyncLifecycle) {
+            throw new Error(msg.replace('Warning:', 'Error:'));
+        }
+        (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(msg);
+    }
+    static secureMultiResolve(resolutions, disposeMask) {
         return __awaiter(this, void 0, void 0, function* () {
             const results = yield Promise.allSettled(resolutions);
             const rejected = results
@@ -67,7 +76,12 @@ export class AsyncGovernance {
                 // Rollback: Dispose any successful resolutions in this transaction
                 results
                     .filter(r => r.status === 'fulfilled')
-                    .forEach((s) => this.dispose(s.value));
+                    .forEach((s, index) => {
+                    // If mask exists, only dispose if true. Default is true (dispose all).
+                    const shouldDispose = disposeMask ? disposeMask[index] : true;
+                    if (shouldDispose)
+                        this.dispose(s.value);
+                });
                 if (rejected.length === 1) {
                     throw rejected[0].reason;
                 }

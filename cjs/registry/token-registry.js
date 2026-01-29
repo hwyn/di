@@ -104,7 +104,7 @@ var TokenRegistry = /** @class */ (function () {
         });
     };
     TokenRegistry = tslib_1.__decorate([
-        (0, metadata_1.Injectable)({ providedIn: metadata_1.ROOT_SCOPE, useFactory: function () { return tokenRegistry; } })
+        (0, metadata_1.Injectable)({ scope: metadata_1.ROOT_SCOPE, useFactory: function () { return tokenRegistry; } })
     ], TokenRegistry);
     return TokenRegistry;
 }());

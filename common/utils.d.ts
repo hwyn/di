@@ -22,11 +22,17 @@ export declare const DEBUG_MODE: {
 export declare const InstantiationPolicy: {
     logger: {
         warn: (msg: string) => void;
+        log?: (msg: string) => void;
     } | null;
     /** If true, treating async onInit in sync instantiation as a fatal error. */
     strictAsyncLifecycle: boolean;
     /** If true, prohibits adding providers to an already resolved multi-token. */
     strictMultiInjection: boolean;
+    /** Active environment context for registration */
+    activeEnv: string | null;
+    /** Global admission policy */
+    globalAdmission: ((token: any, provider: any, injector: any) => boolean) | null;
+    registerDebugTools: (tools: Record<string, Function>) => void;
 };
 export declare function debugLog(message: string, ...args: any[]): void;
 export declare function enhanceError(e: any, token: any): any;

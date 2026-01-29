@@ -12,10 +12,10 @@ exports.instantiateAsync = instantiateAsync;
 exports.executeInstantiationAsync = executeInstantiationAsync;
 var tslib_1 = require("tslib");
 var registry_1 = require("../registry");
+var metadata_1 = require("../metadata");
 var common_1 = require("../common");
 var standard_hook_1 = require("./standard-hook");
 var cyclic_1 = require("./cyclic");
-var prop_resolution_1 = require("./prop-resolution");
 function getTokenName(token) {
     return token.name || (typeof token === 'string' ? token : token.toString());
 }
@@ -60,7 +60,7 @@ function executeInstantiation(token, record, ctx) {
     }
     var metadata = resolveMetadata(token, record);
     if (!metadata) {
-        var instance_1 = record.factory(ctx, prop_resolution_1.ResolveMode.Sync);
+        var instance_1 = record.factory(ctx, metadata_1.ResolveMode.Sync);
         if (hasOnInit(instance_1)) {
             var result = instance_1.onInit();
             if (result instanceof Promise)
@@ -72,7 +72,7 @@ function executeInstantiation(token, record, ctx) {
         (0, standard_hook_1.runBefore)(token, record, ctx);
     }
     var instance;
-    var baseFactory = function () { return record.factory(ctx, prop_resolution_1.ResolveMode.Sync); };
+    var baseFactory = function () { return record.factory(ctx, metadata_1.ResolveMode.Sync); };
     var effectiveFactory = metadata.customFactory
         ? function () { return metadata.customFactory(record, baseFactory, ctx); }
         : baseFactory;
@@ -109,7 +109,7 @@ function applyInterceptorSync(instance, token, ctx) {
     return result || instance;
 }
 function instantiateAsync(token, record, ctx) {
-    return tslib_1.__awaiter(this, void 0, void 0, function () {
+    return tslib_1.__awaiter(this, void 0, Promise, function () {
         var instance;
         return tslib_1.__generator(this, function (_a) {
             switch (_a.label) {
@@ -122,7 +122,7 @@ function instantiateAsync(token, record, ctx) {
     });
 }
 function executeInstantiationAsync(token, record, ctx) {
-    return tslib_1.__awaiter(this, void 0, void 0, function () {
+    return tslib_1.__awaiter(this, void 0, Promise, function () {
         var metadata, instance_2, result, instance, baseFactory, effectiveFactory, e_1, result, e_2;
         var _this = this;
         var _a, _b, _c;
@@ -131,7 +131,7 @@ function executeInstantiationAsync(token, record, ctx) {
                 case 0:
                     metadata = resolveMetadata(token, record);
                     if (!!metadata) return [3 /*break*/, 4];
-                    return [4 /*yield*/, record.factory(ctx, prop_resolution_1.ResolveMode.Async)];
+                    return [4 /*yield*/, record.factory(ctx, metadata_1.ResolveMode.Async)];
                 case 1:
                     instance_2 = _d.sent();
                     if (!hasOnInit(instance_2)) return [3 /*break*/, 3];
@@ -150,7 +150,7 @@ function executeInstantiationAsync(token, record, ctx) {
                     _d.label = 6;
                 case 6:
                     baseFactory = function () { return tslib_1.__awaiter(_this, void 0, void 0, function () { return tslib_1.__generator(this, function (_a) {
-                        return [2 /*return*/, record.factory(ctx, prop_resolution_1.ResolveMode.Async)];
+                        return [2 /*return*/, record.factory(ctx, metadata_1.ResolveMode.Async)];
                     }); }); };
                     effectiveFactory = metadata.customFactory
                         ? function () { return metadata.customFactory(record, baseFactory, ctx); }
@@ -203,7 +203,7 @@ function executeInstantiationAsync(token, record, ctx) {
     });
 }
 function applyInterceptorAsync(instance, token, ctx) {
-    return tslib_1.__awaiter(this, void 0, void 0, function () {
+    return tslib_1.__awaiter(this, void 0, Promise, function () {
         var strategy, result;
         return tslib_1.__generator(this, function (_a) {
             switch (_a.label) {

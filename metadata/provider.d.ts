@@ -14,6 +14,8 @@ export type Token<T = any> = Type<T> | InjectorToken | Function;
 export interface AbstractProvider {
     provide: TokenKey;
     multi?: boolean;
+    /** Environment tag for isolation */
+    env?: string;
     private?: boolean;
 }
 export interface AbstractProviderWithDeps extends AbstractProvider {
@@ -44,6 +46,8 @@ export type ProvidedInScope = string | symbol | object | null | undefined;
 export interface InjectableDef<T, S = ProvidedInScope> {
     factory?: (ctx?: any) => T;
     opt?: any;
-    providedIn?: S;
+    scope?: S;
     token: any;
+    /** Environment tag for isolation */
+    env?: string;
 }

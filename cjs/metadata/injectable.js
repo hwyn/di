@@ -9,15 +9,19 @@ var tslib_1 = require("tslib");
 var constants_1 = require("./constants");
 var decorators_1 = require("./decorators");
 var metadata_keys_1 = require("./metadata-keys");
+var common_1 = require("../common");
 var setInjectableDef = function (type, opt) {
-    var _a = (opt || {}).providedIn, providedIn = _a === void 0 ? constants_1.ROOT_SCOPE : _a;
-    var def = { token: type, providedIn: providedIn, opt: opt };
+    var _a = (opt || {}).scope, scope = _a === void 0 ? constants_1.ROOT_SCOPE : _a;
+    var def = { token: type, scope: scope, opt: opt };
+    if (common_1.InstantiationPolicy.activeEnv) {
+        def.env = common_1.InstantiationPolicy.activeEnv;
+    }
     return (0, metadata_keys_1.setInjectableDef)(type, def);
 };
 exports.setInjectableDef = setInjectableDef;
 exports.Injectable = (0, decorators_1.makeDecorator)('Injectable', function (opt) { return opt; }, exports.setInjectableDef);
 var resolveToken = function (token, opt) { return (tslib_1.__assign(tslib_1.__assign({}, opt), { token: token })); };
 exports.Inject = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Inject', resolveToken), constants_1.DecoratorFlags.Inject);
-exports.Optional = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Optional'), 1 /* InjectFlags.Optional */);
-exports.Self = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Self'), 2 /* InjectFlags.Self */);
-exports.SkipSelf = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('SkipSelf'), 4 /* InjectFlags.SkipSelf */);
+exports.Optional = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Optional'), constants_1.InjectFlags.Optional);
+exports.Self = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Self'), constants_1.InjectFlags.Self);
+exports.SkipSelf = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('SkipSelf'), constants_1.InjectFlags.SkipSelf);

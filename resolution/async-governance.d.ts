@@ -10,5 +10,6 @@ export declare class AsyncGovernance {
     static dispose(instance: any): void;
     static governLifecycle<T>(record: InjectorRecord<T>, worker: Promise<T>): Promise<T>;
     static enforceLock(record: InjectorRecord<any>, tokenName: string): void;
-    static secureMultiResolve(resolutions: (any | Promise<any>)[]): Promise<any[]>;
+    static enforceSyncConstraint(token: any): void;
+    static secureMultiResolve(resolutions: (any | Promise<any>)[], disposeMask?: boolean[]): Promise<any[]>;
 }

@@ -101,7 +101,7 @@ var TokenRegistry = /** @class */ (function () {
         });
     };
     TokenRegistry = __decorate([
-        Injectable({ providedIn: ROOT_SCOPE, useFactory: function () { return tokenRegistry; } })
+        Injectable({ scope: ROOT_SCOPE, useFactory: function () { return tokenRegistry; } })
     ], TokenRegistry);
     return TokenRegistry;
 }());

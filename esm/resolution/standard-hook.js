@@ -4,8 +4,14 @@
  */
 import { __awaiter } from "tslib";
 import { HookMetadata } from "../registry/index.js";
+import { InstantiationPolicy } from "../common/index.js";
 export function onAdmission(token, provider, context) {
     var _a;
+    const global = InstantiationPolicy.globalAdmission;
+    if (global) {
+        if (global(token, provider, context) === false)
+            return false;
+    }
     const hook = (_a = HookMetadata.get(token)) === null || _a === void 0 ? void 0 : _a.onAllow;
     if (hook) {
         return hook(token, provider, context);

@@ -9,6 +9,10 @@ export declare const enum InjectFlags {
     SkipSelf = 4,
     AllowAsync = 65536
 }
+export declare enum ResolveMode {
+    Sync = 0,
+    Async = 1
+}
 export declare const enum RecordFlags {
     None = 0,
     MaskFromChild = 134217728,

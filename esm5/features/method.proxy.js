@@ -56,9 +56,10 @@ var MethodProxy = /** @class */ (function () {
         });
         return proxy;
     };
+    var _a;
     __decorate([
         Inject(Injector),
-        __metadata("design:type", StaticInjector)
+        __metadata("design:type", typeof (_a = typeof StaticInjector !== "undefined" && StaticInjector) === "function" ? _a : Object)
     ], MethodProxy.prototype, "injector", void 0);
     MethodProxy = __decorate([
         Injectable()

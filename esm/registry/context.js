@@ -9,7 +9,9 @@ class GlobalStore {
     constructor() {
         this.active = null;
     }
-    get() { return this.active; }
+    get() {
+        return this.active;
+    }
     run(injector, fn) {
         const prev = this.active;
         this.active = injector;
@@ -26,35 +28,41 @@ class GlobalStore {
 }
 // --- Implementation: Node.js AsyncLocalStorage ---
 function createNodeStore() {
-    // Robust Node.js detection
+    // 1. Strict Node.js Environment Guard
     const isNode = typeof process !== 'undefined' &&
         process.versions != null &&
         process.versions.node != null;
     if (!isNode)
         return null;
     try {
-        // 1. Try resolving a synchronous require function
-        let _require = null;
-        try {
-            _require = typeof require !== 'undefined' ? require : undefined;
+        const pkgName = 'async_hooks';
+        let AlsClass;
+        // 2. Dynamic Require Strategy to bypass bundler static analysis
+        let nativeRequire;
+        // A. Webpack-specific escape hatch
+        // @ts-ignore
+        if (typeof __non_webpack_require__ !== 'undefined') {
+            // @ts-ignore
+            nativeRequire = __non_webpack_require__;
         }
-        catch (_a) { }
-        if (!_require && typeof module !== 'undefined' && module.require) {
-            _require = module.require;
+        // B. Try 'module.require' via string access to avoid static analysis detection
+        // (Many bundlers ignore module['prop'] but catch module.prop)
+        else if (typeof module !== 'undefined' && module['require']) {
+            nativeRequire = module['require'];
         }
-        // 2. Load async_hooks
-        let AsyncLocalStorage;
-        if (_require) {
-            // CJS or Shimmed Environment
-            AsyncLocalStorage = _require('async_hooks').AsyncLocalStorage;
-        }
+        // C. Fallback: try to eval('require') to break out of sandboxes
         else {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const { createRequire } = require('module');
-            const load = createRequire(process.cwd() + '/');
-            AsyncLocalStorage = load('async_hooks').AsyncLocalStorage;
+            try {
+                nativeRequire = eval('require');
+            }
+            catch (e) { }
         }
-        const als = new AsyncLocalStorage();
+        if (nativeRequire) {
+            AlsClass = nativeRequire(pkgName).AsyncLocalStorage;
+        }
+        if (!AlsClass)
+            return null;
+        const als = new AlsClass();
         return {
             get: () => als.getStore() || null,
             run: (injector, fn) => als.run(injector, fn),
@@ -64,9 +72,7 @@ function createNodeStore() {
         };
     }
     catch (e) {
-        // Graceful fallback if anything fails (e.g. strict security policies, unpolyfilled environments)
-        // InstantiationPolicy.logger?.warn('[DI] AsyncLocalStorage unavailable.', e);
-        return null;
+        throw new Error(`[DI] Fatal Error: Failed to load 'async_hooks' in Node.js environment. Context isolation is impossible.\nOriginal Error: ${e}`);
     }
 }
 // --- Initialization ---

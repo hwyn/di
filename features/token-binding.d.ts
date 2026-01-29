@@ -1,10 +1,15 @@
 /**
  * @file token-binding.ts
- * @description Provides @Token and @MultiToken decorators for simplified dependency binding.
- * This is an extension to the core DI system, leveraging `setInjectableDef` for metadata registration.
- * Note: Cyclic dependencies in the bound classes are handled by the core DI's `forwardRef` support (via `ɵɵInject`).
- * The `deps` resolution in `MultiToken` is lazy, ensuring all classes are registered before factory execution.
+ * @description Dependency Injection Token Binding System
+ *
+ * Manages the registration and resolution strategies for DI Tokens.
+ * Implements a "Smart Factory" pattern that:
+ * 1. Supports both Single and Multi-provider bindings
+ * 2. Handles Scope-based filtering (Root vs Component scopes)
+ * 3. Adapts to Sync and Async resolution modes automatically
+ * 4. Provides high-performance lookups using WeakMaps and closure caching
  */
-import { InjectorToken, Type } from '../metadata';
+import { InjectorToken, Type, Provider } from '../metadata';
+export declare function register(input: Provider | Provider[], scope?: string, isDecorator?: boolean): void;
 export declare function Token(token: InjectorToken, scope?: string): (target: Type<any>) => void;
 export declare function MultiToken(token: InjectorToken, scope?: string): (target: Type<any>) => void;

@@ -2,10 +2,10 @@
  * @file core/types.ts
  * @description Defines core interfaces and types used within the DI system (Injector records, hooks, context).
  */
-import { Provider } from '../metadata';
+import { Provider, ResolveMode } from '../metadata';
 import { InstanceHookMetadata } from './hook-metadata';
 export type EMPTY_Object = {};
-import { Injector } from './injector';
+import type { Injector } from './injector';
 export interface Record<T> {
     factory: ((ctx?: Injector, mode?: number) => T) | undefined;
     value: T | object;
@@ -32,3 +32,15 @@ export type InterceptorFn = (instance: any, token: any, injector: any) => any;
 export interface InternalInjector extends Injector {
     interceptStrategy?: ((instance: any, token: any) => any) | null;
 }
+export interface TransformContext {
+    mode: ResolveMode;
+    value: any;
+    meta: any;
+    target?: any;
+    key: string | number;
+    index?: number;
+    args?: any[];
+    injector: Injector;
+}
+export type TransformFn = (ctx: TransformContext) => any;
+export type TransformProp = TransformFn;

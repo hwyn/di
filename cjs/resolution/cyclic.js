@@ -6,26 +6,27 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.guardCyclicDependency = guardCyclicDependency;
 var tslib_1 = require("tslib");
+var metadata_1 = require("../metadata");
 /**
  * Wraps the instantiation process with safeguards against cyclic dependencies.
  * If a cycle is detected, it returns a Proxy instead of the real instance (for supported providers).
  */
 function guardCyclicDependency(token, record, next) {
-    if (record.flags & 1073741824 /* RecordFlags.MaskInstantiating */) {
+    if (record.flags & metadata_1.RecordFlags.MaskInstantiating) {
         return handleCyclicReference(record);
     }
-    record.flags = (record.flags || 0) | 1073741824 /* RecordFlags.MaskInstantiating */;
+    record.flags = (record.flags || 0) | metadata_1.RecordFlags.MaskInstantiating;
     try {
         var instance = next();
-        if (record.flags & 536870912 /* RecordFlags.MaskHasProxy */) {
+        if (record.flags & metadata_1.RecordFlags.MaskHasProxy) {
             linkProxyState(record, instance);
-            record.flags &= ~536870912 /* RecordFlags.MaskHasProxy */;
+            record.flags &= ~metadata_1.RecordFlags.MaskHasProxy;
             record.__proxy__ = undefined;
         }
         return instance;
     }
     finally {
-        record.flags &= ~1073741824 /* RecordFlags.MaskInstantiating */;
+        record.flags &= ~metadata_1.RecordFlags.MaskInstantiating;
     }
 }
 function handleCyclicReference(record) {
@@ -37,7 +38,7 @@ function handleCyclicReference(record) {
                 "Note: 'useFactory' providers do not support cyclic dependencies.");
         }
         record.__proxy__ = createProxyUtil(type);
-        record.flags |= 536870912 /* RecordFlags.MaskHasProxy */;
+        record.flags |= metadata_1.RecordFlags.MaskHasProxy;
     }
     return record.__proxy__;
 }
