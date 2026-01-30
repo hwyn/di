@@ -2,43 +2,48 @@
  * @file features/method.proxy.ts
  * @description Experimental feature for AOP-style method interception and proxying.
  */
-var _a;
-import { __decorate, __metadata } from "tslib";
-import { Injector, runInInjectionContext } from "../registry/index.js";
-import { resolveParams, StaticInjector } from "../resolution/index.js";
-import { Inject, Injectable, IS_PROXY, NATIVE_METHOD, Reflector } from "../metadata/index.js";
+import { __decorate } from "tslib";
+import { resolveParams } from "../resolution/index.js";
+import { Injectable, IS_PROXY, NATIVE_METHOD, Reflector } from "../metadata/index.js";
+const SYSTEM_CALL_MARKER = Symbol('__DI_SYS_CALL__');
 let MethodProxy = class MethodProxy {
+    constructor() {
+        this.SYSTEM_CALL_MARKER = SYSTEM_CALL_MARKER;
+    }
+    createSystemInvoker(instance, method) {
+        const agent = this.proxyMethod(instance, method);
+        return (...args) => agent.call(instance, ...args, this.SYSTEM_CALL_MARKER);
+    }
     proxyMethod(instance, method) {
         var _a;
         const agent = instance[method];
         const ctor = (_a = Object.getPrototypeOf(instance)) === null || _a === void 0 ? void 0 : _a.constructor;
         if (!ctor || typeof agent !== 'function')
             return agent;
+        const annotations = Reflector.resolveParameterAnnotations(ctor, method);
+        if (!annotations || !annotations.length)
+            return agent.bind(instance);
         const nativeStore = ctor[NATIVE_METHOD] || {};
         const targetMethod = nativeStore[method] || agent;
-        const proxy = this.createProxy(instance, method, targetMethod);
+        const proxy = this.createProxy(instance, method, targetMethod, annotations);
         if (nativeStore[method]) {
             nativeStore[method] = proxy;
             return agent;
         }
         return proxy;
     }
-    createProxy(instance, method, nativeMethod) {
+    createProxy(instance, method, nativeMethod, annotations) {
         if (nativeMethod[IS_PROXY])
             return nativeMethod;
-        const injector = this.injector;
-        let annotations = null;
         const wrapper = {
             [method]: function (...args) {
-                if (!annotations) {
-                    const ctor = Object.getPrototypeOf(instance).constructor;
-                    annotations = Reflector.resolveParameterAnnotations(ctor, method) || [];
+                const lastArg = args.length > 0 ? args[args.length - 1] : undefined;
+                const isSystemCall = lastArg === SYSTEM_CALL_MARKER;
+                if (isSystemCall) {
+                    const realArgs = args.slice(0, -1);
+                    return nativeMethod.apply(instance, resolveParams(annotations, realArgs));
                 }
-                if (!annotations.length)
-                    return nativeMethod.apply(instance, args);
-                return runInInjectionContext(injector, () => {
-                    return nativeMethod.apply(instance, resolveParams(annotations, [...args]));
-                });
+                return nativeMethod.apply(instance, args);
             }
         };
         const proxy = wrapper[method];
@@ -51,10 +56,6 @@ let MethodProxy = class MethodProxy {
         return proxy;
     }
 };
-__decorate([
-    Inject(Injector),
-    __metadata("design:type", typeof (_a = typeof StaticInjector !== "undefined" && StaticInjector) === "function" ? _a : Object)
-], MethodProxy.prototype, "injector", void 0);
 MethodProxy = __decorate([
     Injectable()
 ], MethodProxy);

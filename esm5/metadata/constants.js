@@ -31,6 +31,7 @@ export var IGNORE_SCOPE = Symbol('IGNORE_SCOPE');
 export var DecoratorFlags;
 (function (DecoratorFlags) {
     DecoratorFlags[DecoratorFlags["Inject"] = -1] = "Inject";
+    DecoratorFlags[DecoratorFlags["Pipeline"] = -2] = "Pipeline";
 })(DecoratorFlags || (DecoratorFlags = {}));
 export var NO_VALUE = {};
 export var EMPTY_ARRAY = Object.freeze([]);

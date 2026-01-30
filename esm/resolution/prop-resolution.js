@@ -8,26 +8,30 @@ const defCache = new WeakMap();
 const EMPTY_DEF = { token: undefined, flags: 0, transforms: undefined };
 function compileDependency(metas) {
     let flags = 0;
-    let token;
+    let injectToken;
+    let pipeToken;
+    let typeToken;
     let transforms;
     for (let i = 0, len = metas.length; i < len; i++) {
         const item = metas[i];
         const flag = item[DI_DECORATOR_FLAG];
         if (flag === DecoratorFlags.Inject) {
-            token = item.token;
+            injectToken = item.token;
+        }
+        else if (flag === DecoratorFlags.Pipeline) {
+            pipeToken !== null && pipeToken !== void 0 ? pipeToken : (pipeToken = item.token);
+            (transforms !== null && transforms !== void 0 ? transforms : (transforms = [])).push(item);
         }
         else if (typeof flag === 'number') {
             flags |= flag;
         }
-        else if (!item.transform) {
-            token = item;
-        }
-        if (item.transform) {
-            (transforms !== null && transforms !== void 0 ? transforms : (transforms = [])).push(item);
+        else if (flag === undefined) {
+            typeToken = item;
         }
     }
     if (transforms)
         transforms.reverse();
+    const token = injectToken !== null && injectToken !== void 0 ? injectToken : (pipeToken ? undefined : typeToken);
     return { token: token, flags, transforms };
 }
 function getDef(metas) {
@@ -42,7 +46,7 @@ function getDef(metas) {
     }
     return def;
 }
-function resolveValue(metas, executor, context, mode) {
+function resolveValue(metas, context, mode) {
     const def = getDef(metas);
     let value;
     if (def.token !== undefined) {
@@ -50,41 +54,45 @@ function resolveValue(metas, executor, context, mode) {
     }
     if (def.transforms) {
         if (mode === ResolveMode.Async && value instanceof Promise) {
-            value = value.then(v => applyTransforms(def.transforms, executor, context, v, mode));
+            const asyncContext = Object.assign({}, context);
+            value = value.then(v => applyTransforms(def.transforms, asyncContext, v, mode));
         }
         else {
-            value = applyTransforms(def.transforms, executor, context, value, mode);
+            value = applyTransforms(def.transforms, context, value, mode);
         }
     }
     return value;
 }
-function applyTransforms(transforms, executor, context, initialValue, mode) {
+function applyTransforms(transforms, context, initialValue, mode) {
+    const { args, target, key, injector } = context;
+    const inj = injector;
+    if (mode === ResolveMode.Async) {
+        return transforms.reduce((chain, meta) => chain.then((val) => {
+            return inj.getAsync(meta.token).then((pipe) => pipe.transform({
+                mode,
+                value: val,
+                meta,
+                args,
+                target,
+                key,
+                injector: inj
+            }));
+        }), Promise.resolve(initialValue));
+    }
     let value = initialValue;
     for (const meta of transforms) {
-        value = executor(context, meta.transform, meta, value, mode);
+        value = inj.get(meta.token).transform({
+            mode,
+            value,
+            meta,
+            args,
+            target,
+            key,
+            injector: inj
+        });
     }
     return value;
 }
-const paramExecutor = (ctx, transform, meta, value, mode) => {
-    return transform({
-        mode,
-        value,
-        meta,
-        args: ctx.args,
-        key: ctx.key,
-        injector: ctx.injector
-    });
-};
-const propExecutor = (ctx, transform, meta, value, mode) => {
-    return transform({
-        mode,
-        value,
-        meta,
-        target: ctx.target,
-        key: ctx.key,
-        injector: ctx.injector
-    });
-};
 export function resolveParams(deps, args = [], mode = ResolveMode.Sync) {
     const len = deps.length;
     const result = new Array(len);
@@ -93,7 +101,7 @@ export function resolveParams(deps, args = [], mode = ResolveMode.Sync) {
         const dep = deps[i];
         if (Array.isArray(dep)) {
             context.key = i;
-            result[i] = resolveValue(dep, paramExecutor, context, mode);
+            result[i] = resolveValue(dep, context, mode);
         }
         else {
             result[i] = mode === ResolveMode.Async ? ɵɵInjectAsync(dep, 0) : ɵɵInject(dep, 0);
@@ -107,7 +115,7 @@ export function resolveProps(target, props, mode = ResolveMode.Sync) {
         const promises = [];
         for (const key in props) {
             context.key = key;
-            const v = resolveValue(props[key], propExecutor, context, mode);
+            const v = resolveValue(props[key], context, mode);
             if (v instanceof Promise) {
                 promises.push(v.then(val => {
                     if (val !== target[key])
@@ -124,7 +132,7 @@ export function resolveProps(target, props, mode = ResolveMode.Sync) {
     else {
         for (const key in props) {
             context.key = key;
-            const value = resolveValue(props[key], propExecutor, context, mode);
+            const value = resolveValue(props[key], context, mode);
             if (value !== target[key])
                 target[key] = value;
         }

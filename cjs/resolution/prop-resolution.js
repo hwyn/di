@@ -13,26 +13,30 @@ var defCache = new WeakMap();
 var EMPTY_DEF = { token: undefined, flags: 0, transforms: undefined };
 function compileDependency(metas) {
     var flags = 0;
-    var token;
+    var injectToken;
+    var pipeToken;
+    var typeToken;
     var transforms;
     for (var i = 0, len = metas.length; i < len; i++) {
         var item = metas[i];
         var flag = item[metadata_1.DI_DECORATOR_FLAG];
         if (flag === metadata_1.DecoratorFlags.Inject) {
-            token = item.token;
+            injectToken = item.token;
+        }
+        else if (flag === metadata_1.DecoratorFlags.Pipeline) {
+            pipeToken !== null && pipeToken !== void 0 ? pipeToken : (pipeToken = item.token);
+            (transforms !== null && transforms !== void 0 ? transforms : (transforms = [])).push(item);
         }
         else if (typeof flag === 'number') {
             flags |= flag;
         }
-        else if (!item.transform) {
-            token = item;
-        }
-        if (item.transform) {
-            (transforms !== null && transforms !== void 0 ? transforms : (transforms = [])).push(item);
+        else if (flag === undefined) {
+            typeToken = item;
         }
     }
     if (transforms)
         transforms.reverse();
+    var token = injectToken !== null && injectToken !== void 0 ? injectToken : (pipeToken ? undefined : typeToken);
     return { token: token, flags: flags, transforms: transforms };
 }
 function getDef(metas) {
@@ -47,7 +51,7 @@ function getDef(metas) {
     }
     return def;
 }
-function resolveValue(metas, executor, context, mode) {
+function resolveValue(metas, context, mode) {
     var def = getDef(metas);
     var value;
     if (def.token !== undefined) {
@@ -55,21 +59,45 @@ function resolveValue(metas, executor, context, mode) {
     }
     if (def.transforms) {
         if (mode === metadata_1.ResolveMode.Async && value instanceof Promise) {
-            value = value.then(function (v) { return applyTransforms(def.transforms, executor, context, v, mode); });
+            var asyncContext_1 = tslib_1.__assign({}, context);
+            value = value.then(function (v) { return applyTransforms(def.transforms, asyncContext_1, v, mode); });
         }
         else {
-            value = applyTransforms(def.transforms, executor, context, value, mode);
+            value = applyTransforms(def.transforms, context, value, mode);
         }
     }
     return value;
 }
-function applyTransforms(transforms, executor, context, initialValue, mode) {
+function applyTransforms(transforms, context, initialValue, mode) {
     var e_1, _a;
+    var args = context.args, target = context.target, key = context.key, injector = context.injector;
+    var inj = injector;
+    if (mode === metadata_1.ResolveMode.Async) {
+        return transforms.reduce(function (chain, meta) { return chain.then(function (val) {
+            return inj.getAsync(meta.token).then(function (pipe) { return pipe.transform({
+                mode: mode,
+                value: val,
+                meta: meta,
+                args: args,
+                target: target,
+                key: key,
+                injector: inj
+            }); });
+        }); }, Promise.resolve(initialValue));
+    }
     var value = initialValue;
     try {
         for (var transforms_1 = tslib_1.__values(transforms), transforms_1_1 = transforms_1.next(); !transforms_1_1.done; transforms_1_1 = transforms_1.next()) {
             var meta = transforms_1_1.value;
-            value = executor(context, meta.transform, meta, value, mode);
+            value = inj.get(meta.token).transform({
+                mode: mode,
+                value: value,
+                meta: meta,
+                args: args,
+                target: target,
+                key: key,
+                injector: inj
+            });
         }
     }
     catch (e_1_1) { e_1 = { error: e_1_1 }; }
@@ -81,26 +109,6 @@ function applyTransforms(transforms, executor, context, initialValue, mode) {
     }
     return value;
 }
-var paramExecutor = function (ctx, transform, meta, value, mode) {
-    return transform({
-        mode: mode,
-        value: value,
-        meta: meta,
-        args: ctx.args,
-        key: ctx.key,
-        injector: ctx.injector
-    });
-};
-var propExecutor = function (ctx, transform, meta, value, mode) {
-    return transform({
-        mode: mode,
-        value: value,
-        meta: meta,
-        target: ctx.target,
-        key: ctx.key,
-        injector: ctx.injector
-    });
-};
 function resolveParams(deps, args, mode) {
     if (args === void 0) { args = []; }
     if (mode === void 0) { mode = metadata_1.ResolveMode.Sync; }
@@ -111,7 +119,7 @@ function resolveParams(deps, args, mode) {
         var dep = deps[i];
         if (Array.isArray(dep)) {
             context.key = i;
-            result[i] = resolveValue(dep, paramExecutor, context, mode);
+            result[i] = resolveValue(dep, context, mode);
         }
         else {
             result[i] = mode === metadata_1.ResolveMode.Async ? (0, registry_1.ɵɵInjectAsync)(dep, 0) : (0, registry_1.ɵɵInject)(dep, 0);
@@ -126,7 +134,7 @@ function resolveProps(target, props, mode) {
         var promises = [];
         var _loop_1 = function (key) {
             context.key = key;
-            var v = resolveValue(props[key], propExecutor, context, mode);
+            var v = resolveValue(props[key], context, mode);
             if (v instanceof Promise) {
                 promises.push(v.then(function (val) {
                     if (val !== target[key])
@@ -146,7 +154,7 @@ function resolveProps(target, props, mode) {
     else {
         for (var key in props) {
             context.key = key;
-            var value = resolveValue(props[key], propExecutor, context, mode);
+            var value = resolveValue(props[key], context, mode);
             if (value !== target[key])
                 target[key] = value;
         }

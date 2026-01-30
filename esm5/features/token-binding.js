@@ -105,13 +105,8 @@ function installTokenHooks(token, isDecorator) {
         onAllow: function (_token, provider) {
             var _a;
             if (provider && isDecorator) {
-                var state = TOKEN_BINDING_STATE.get(token);
-                var isMulti = (state === null || state === void 0 ? void 0 : state.mode) === 'multi';
                 var name = token.name || token.toString();
-                var msg = isMulti
-                    ? "[DI Warning] \u26A0\uFE0F Explicit provider overrides implicit @MultiToken bindings: ".concat(name)
-                    : "[DI Warning] \u26A0\uFE0F Explicit provider overrides implicit @Token binding: ".concat(name);
-                (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(msg);
+                (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn("[DI Warning] \u26A0\uFE0F Explicit provider overrides implicit @Token binding: ".concat(name));
             }
             return true;
         }
@@ -173,15 +168,27 @@ export function register(input, scope, isDecorator) {
         state.registry.add({ provider: body, scope: scope });
     });
 }
+function validateBinding(target, scope, token) {
+    var _a, _b;
+    var def = getInjectableDef(target);
+    if (!def) {
+        (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn("[DI Warning] Missing @Injectable decorator for '".concat(target.name, "' (Token: ").concat(String(token), "). Check decorator order."));
+    }
+    else if (def.scope && def.scope !== scope) {
+        (_b = InstantiationPolicy.logger) === null || _b === void 0 ? void 0 : _b.warn("[DI Warning] Scope mismatch: '".concat(target.name, "' is '").concat(def.scope, "' but Token '").concat(String(token), "' is '").concat(scope, "'."));
+    }
+}
 export function Token(token, scope) {
     if (scope === void 0) { scope = ROOT_SCOPE; }
     return function (target) {
+        validateBinding(target, scope, token);
         register({ provide: token, useClass: target }, scope, true);
     };
 }
 export function MultiToken(token, scope) {
     if (scope === void 0) { scope = ROOT_SCOPE; }
     return function (target) {
-        register({ provide: token, multi: true, useClass: target }, scope, true);
+        validateBinding(target, scope, token);
+        register({ provide: token, multi: true, useClass: target }, scope);
     };
 }

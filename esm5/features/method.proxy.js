@@ -2,49 +2,60 @@
  * @file features/method.proxy.ts
  * @description Experimental feature for AOP-style method interception and proxying.
  */
-import { __decorate, __metadata, __read, __spreadArray } from "tslib";
-import { Injector, runInInjectionContext } from "../registry/index.js";
-import { resolveParams, StaticInjector } from "../resolution/index.js";
-import { Inject, Injectable, IS_PROXY, NATIVE_METHOD, Reflector } from "../metadata/index.js";
+import { __decorate, __read, __spreadArray } from "tslib";
+import { resolveParams } from "../resolution/index.js";
+import { Injectable, IS_PROXY, NATIVE_METHOD, Reflector } from "../metadata/index.js";
+var SYSTEM_CALL_MARKER = Symbol('__DI_SYS_CALL__');
 var MethodProxy = /** @class */ (function () {
     function MethodProxy() {
+        this.SYSTEM_CALL_MARKER = SYSTEM_CALL_MARKER;
     }
+    MethodProxy.prototype.createSystemInvoker = function (instance, method) {
+        var _this = this;
+        var agent = this.proxyMethod(instance, method);
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            return agent.call.apply(agent, __spreadArray(__spreadArray([instance], __read(args), false), [_this.SYSTEM_CALL_MARKER], false));
+        };
+    };
     MethodProxy.prototype.proxyMethod = function (instance, method) {
         var _a;
         var agent = instance[method];
         var ctor = (_a = Object.getPrototypeOf(instance)) === null || _a === void 0 ? void 0 : _a.constructor;
         if (!ctor || typeof agent !== 'function')
             return agent;
+        var annotations = Reflector.resolveParameterAnnotations(ctor, method);
+        if (!annotations || !annotations.length)
+            return agent.bind(instance);
         var nativeStore = ctor[NATIVE_METHOD] || {};
         var targetMethod = nativeStore[method] || agent;
-        var proxy = this.createProxy(instance, method, targetMethod);
+        var proxy = this.createProxy(instance, method, targetMethod, annotations);
         if (nativeStore[method]) {
             nativeStore[method] = proxy;
             return agent;
         }
         return proxy;
     };
-    MethodProxy.prototype.createProxy = function (instance, method, nativeMethod) {
+    MethodProxy.prototype.createProxy = function (instance, method, nativeMethod, annotations) {
         var _a;
         if (nativeMethod[IS_PROXY])
             return nativeMethod;
-        var injector = this.injector;
-        var annotations = null;
         var wrapper = (_a = {},
             _a[method] = function () {
                 var args = [];
                 for (var _i = 0; _i < arguments.length; _i++) {
                     args[_i] = arguments[_i];
                 }
-                if (!annotations) {
-                    var ctor = Object.getPrototypeOf(instance).constructor;
-                    annotations = Reflector.resolveParameterAnnotations(ctor, method) || [];
+                var lastArg = args.length > 0 ? args[args.length - 1] : undefined;
+                var isSystemCall = lastArg === SYSTEM_CALL_MARKER;
+                if (isSystemCall) {
+                    var realArgs = args.slice(0, -1);
+                    return nativeMethod.apply(instance, resolveParams(annotations, realArgs));
                 }
-                if (!annotations.length)
-                    return nativeMethod.apply(instance, args);
-                return runInInjectionContext(injector, function () {
-                    return nativeMethod.apply(instance, resolveParams(annotations, __spreadArray([], __read(args), false)));
-                });
+                return nativeMethod.apply(instance, args);
             },
             _a);
         var proxy = wrapper[method];
@@ -56,11 +67,6 @@ var MethodProxy = /** @class */ (function () {
         });
         return proxy;
     };
-    var _a;
-    __decorate([
-        Inject(Injector),
-        __metadata("design:type", typeof (_a = typeof StaticInjector !== "undefined" && StaticInjector) === "function" ? _a : Object)
-    ], MethodProxy.prototype, "injector", void 0);
     MethodProxy = __decorate([
         Injectable()
     ], MethodProxy);

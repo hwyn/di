@@ -79,13 +79,8 @@ function installTokenHooks(token, isDecorator) {
         onAllow: (_token, provider) => {
             var _a;
             if (provider && isDecorator) {
-                const state = TOKEN_BINDING_STATE.get(token);
-                const isMulti = (state === null || state === void 0 ? void 0 : state.mode) === 'multi';
                 const name = token.name || token.toString();
-                const msg = isMulti
-                    ? `[DI Warning] ⚠️ Explicit provider overrides implicit @MultiToken bindings: ${name}`
-                    : `[DI Warning] ⚠️ Explicit provider overrides implicit @Token binding: ${name}`;
-                (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(msg);
+                (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(`[DI Warning] ⚠️ Explicit provider overrides implicit @Token binding: ${name}`);
             }
             return true;
         }
@@ -145,13 +140,25 @@ export function register(input, scope = ROOT_SCOPE, isDecorator = false) {
         state.registry.add({ provider: body, scope });
     });
 }
+function validateBinding(target, scope, token) {
+    var _a, _b;
+    const def = getInjectableDef(target);
+    if (!def) {
+        (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(`[DI Warning] Missing @Injectable decorator for '${target.name}' (Token: ${String(token)}). Check decorator order.`);
+    }
+    else if (def.scope && def.scope !== scope) {
+        (_b = InstantiationPolicy.logger) === null || _b === void 0 ? void 0 : _b.warn(`[DI Warning] Scope mismatch: '${target.name}' is '${def.scope}' but Token '${String(token)}' is '${scope}'.`);
+    }
+}
 export function Token(token, scope = ROOT_SCOPE) {
     return function (target) {
+        validateBinding(target, scope, token);
         register({ provide: token, useClass: target }, scope, true);
     };
 }
 export function MultiToken(token, scope = ROOT_SCOPE) {
     return function (target) {
-        register({ provide: token, multi: true, useClass: target }, scope, true);
+        validateBinding(target, scope, token);
+        register({ provide: token, multi: true, useClass: target }, scope);
     };
 }

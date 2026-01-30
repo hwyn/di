@@ -23,7 +23,8 @@ export declare const enum RecordFlags {
 export declare const ROOT_SCOPE = "root";
 export declare const IGNORE_SCOPE: unique symbol;
 export declare enum DecoratorFlags {
-    Inject = -1
+    Inject = -1,
+    Pipeline = -2
 }
 export declare const NO_VALUE: {};
 export declare const EMPTY_ARRAY: readonly any[];

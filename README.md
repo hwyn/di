@@ -368,18 +368,24 @@ register({ provide: Logger, useClass: ConsoleLogger }, ROOT_SCOPE);
 
 Bind multiple services to a single token.
 
+> ⚠️ **Warning**: Ensure all providers bound to a Token (especially logical groups like `@MultiToken`) share a consistent `Scope`. Mixing conflicting scopes (e.g., combining `Singleton` and `Scoped` services in one array) may result in unpredictable lifecycle behavior or resolution errors.
+
 ```typescript
 const PLUGINS = new InjectorToken('PLUGINS');
 
+@Injectable()
 @MultiToken(PLUGINS)
 class AuthPlugin {}
 
+@Injectable()
 @MultiToken(PLUGINS)
 class LoggerPlugin {}
 
 // Returns array: [AuthPlugin, LoggerPlugin]
 const plugins = injector.get(PLUGINS); 
 ```
+
+> **Note**: Classes using `@Token` or `@MultiToken` must also be decorated with `@Injectable()` to be properly processed by the DI system.
 
 ### 6. Global Interception (The Middleware)
 
@@ -420,17 +426,34 @@ child.get(SecretService); // Error: Not visible
 
 ### 1. Aspect-Oriented Programming (Method Proxy)
 
-Automatically wrap methods with interceptors using `MethodProxy`.
+Automatically enables **Method Parameter Injection** for specific methods. This allows methods to receive dependencies defined via `@Inject` directly in their arguments without breaking standard usage.
+
+**Dual-Mode Behavior:**
+- **User Calls**: `instance.method(arg)` behaves normally (arguments are passed through as-is).
+- **System Calls**: When invoked via `createSystemInvoker`, parameters are resolved from the Injector.
 
 ```typescript
 import { MethodProxy, HookMetadata } from '@hwy-fm/di';
 
+// 1. Enable Proxy during instantiation
 HookMetadata.hook(Service, {
   after: (instance, token, injector) => {
-    injector.get(MethodProxy).proxyMethod(instance, 'sensitiveMethod');
+    // Patches 'handleRequest' to support dependency injection
+    injector.get(MethodProxy).proxyMethod(instance, 'handleRequest');
     return instance;
   }
 });
+
+// 2. Invoke as System (Triggers Injection)
+// Useful for creating Routers, Job Runners, or Event Handlers
+const proxy = injector.get(MethodProxy);
+const invoker = proxy.createSystemInvoker(instance, 'handleRequest');
+
+await invoker(); // Arguments are automatically injected!
+
+// 3. Invoke Manually (Standard JS behavior)
+// Useful for unit testing or internal calls
+instance.handleRequest('manual-data');
 ```
 
 ### 2. Custom Decorators
@@ -449,30 +472,39 @@ export const Controller = makeDecorator(
 );
 ```
 
-**Parameter Decorators (With Data Transformation):**
+**Parameter Decorators (With Data Transformation / Pipelines):**
 
-Use `markInject` to connect a custom decorator to the DI system, allowing you to define injection tokens and transformation logic simultaneously.
+Use `markInject` with `DecoratorFlags.Pipeline` to create decorators that process data through a transform class (Pipe).
 
 ```typescript
-import { makeParamDecorator, markInject, DecoratorFlags, InjectorToken } from '@hwy-fm/di';
+import { makeParamDecorator, markInject, DecoratorFlags, InjectorToken, Injectable, Inject } from '@hwy-fm/di';
 
 const APPLICATION_METADATA = new InjectorToken('APP_META');
 
-// Helper to extract value from metadata object
-const transform = (key: string) => (value: any) => value?.[key];
+// 1. Define a Transform Pipe
+@Injectable()
+class ConfigExtractorPipe {
+  // Inject the source data
+  constructor(@Inject(APPLICATION_METADATA) private config: any) {}
 
-// Define @Input(key)
-// 1. Injects APPLICATION_METADATA
-// 2. Extracts the specific 'key' from the resolved object
+  // The 'transform' method is invoked by the DI system.
+  // 'context.meta' corresponds to the object returned by the decorator factory below.
+  transform(context: any) {
+    const key = context.meta.key;
+    return this.config?.[key];
+  }
+}
+
+// 2. Define the Decorator @Input(key)
 export const Input = markInject(
   makeParamDecorator(
     'InputParamDecorator', 
     (key: string) => ({ 
-      token: APPLICATION_METADATA, 
-      transform: transform(key) 
+      token: ConfigExtractorPipe, // The token used to resolve the Pipe
+      key: key                    // Metadata passed to the pipe context
     })
   ), 
-  DecoratorFlags.Inject
+  DecoratorFlags.Pipeline         // <--- Critical: Enables the pipeline behavior
 );
 
 // Usage: constructor(@Input('theme') theme: string)
