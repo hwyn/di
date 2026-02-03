@@ -114,7 +114,7 @@ var AsyncGovernance = /** @class */ (function () {
         });
     };
     // Default timeout: 10 seconds (Configurable)
-    AsyncGovernance.TIMEOUT = 10000;
+    AsyncGovernance.TIMEOUT = common_1.InstantiationPolicy.TIMEOUT;
     // Performance threshold: 500ms
     AsyncGovernance.SLOW_THRESHOLD = 500;
     return AsyncGovernance;

@@ -101,7 +101,62 @@ try {
 }
 ```
 
-### 3. 🪝 The "Open Kernel" (Metadata Hooks)
+### 3. 🔥 Smart Scope Proxy (Scope Mismatch Governance)
+
+A sophisticated solution for the classic "Request Scope Contagion" problem found in many Node.js frameworks (like NestJS).
+
+**The Problem:**
+In standard DI, if a Singleton service depends on a Request-scoped service (e.g., `ThreadLocal` context), the Singleton effectively degrades to Request scope. This forces the entire dependency chain to be recreated for every request, causing severe performance degradation.
+
+**Our Solution: Transparent Hook-based Proxying**
+
+Utilizing the powerful `HookMetadata` and `customFactory` capabilities, you can inject a **Lazy Proxy** instead of the real instance. The Singleton service remains a Singleton, but when it accesses the dependency, the Proxy transparently fetches the correct instance for the current request context (e.g., via `AsyncLocalStorage`).
+
+```typescript
+import { HookMetadata, InjectorRecord, AbstractContextStorage } from '@hwy-fm/di';
+
+// 1. Define the Governance Strategy
+function ScopeMismatchGovernance(record: InjectorRecord, next: () => any, injector: Injector) {
+  const isSingletonHost = injector.scope === 'Root'; // or checks against record.scope
+  const isRequestDependency = record.scope === 'Request';
+
+  // Detect Mismatch: Singleton requesting Request-scoped service
+  if (isSingletonHost && isRequestDependency) {
+    // Return a Proxy instead of the real instance
+    return new Proxy({}, {
+      get(target, prop) {
+        // Resolve the actual instance from the active request context at Runtime
+        // AbstractContextStorage is an abstraction over AsyncLocalStorage
+        const requestInjector = AbstractContextStorage.getStore();
+        if (!requestInjector) throw new Error('No active request scope');
+        
+        const realInstance = requestInjector.get(record.token);
+        return Reflect.get(realInstance, prop);
+      }
+    });
+  }
+  return next();
+}
+
+// 2. Apply Policy (e.g., globally or on specific services)
+HookMetadata.hook(RequestContextService, {
+  customFactory: ScopeMismatchGovernance
+});
+
+// 3. Result
+@Injectable()
+class UserService { // Remains Singleton! Included in startup optimization.
+  constructor(private ctx: RequestContextService) {} // Injected with Proxy
+
+  getUser() {
+    return this.ctx.currentUser; // Accesses data specific to the current request
+  }
+}
+```
+
+This feature allows you to maintain a **Singleton-first architecture** with high performance, while safely accessing request-scoped data where needed.
+
+### 4. 🪝 The "Open Kernel" (Metadata Hooks)
 
 A powerful metaprogramming API that lets you intercept and rewrite the DI engine's internal behavior for specific tokens.
 
@@ -118,6 +173,24 @@ HookMetadata.hook(MyService, {
   onScopeCheck: (def, scope) => scope === 'root'
 });
 ```
+
+---
+
+## 🏗️ Real-World Application: The HWY-FM Core
+
+While `@hwy-fm/di` provides the raw dependency injection capabilities, **@hwy-fm/core** demonstrates how to build a full-scale isomorphic framework on top of it.
+
+If you are looking for:
+- **Application Bootstrapping**: How to manage root injectors and platform binding.
+- **Logic Orchestration**: How to use DI to build an AOT-compiled pipeline engine (Kernel).
+- **Environment Abstraction**: How to swap implementations based on Context (Server vs Client).
+
+👉 **Check out the @hwy-fm/core documentation to see this DI container in action.**
+
+The Core framework extends DI with:
+- **`@Application`**: Auto-configuring root injectors.
+- **`@Register`**: Dynamic provider registration for plugins.
+- **`KernelLoader`**: A complex service built entirely using DI patterns.
 
 ---
 

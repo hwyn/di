@@ -14,7 +14,7 @@ export const setInjectableDef = (type, opt) => {
     }
     return _setInjectableDef(type, def);
 };
-export const Injectable = makeDecorator('Injectable', (opt) => opt, setInjectableDef);
+export const Injectable = makeDecorator('Injectable', (opt) => opt, (target, { args }) => setInjectableDef(target, ...args));
 const resolveToken = (token, opt) => (Object.assign(Object.assign({}, opt), { token }));
 export const Inject = markInject(makeParamDecorator('Inject', resolveToken), DecoratorFlags.Inject);
 export const Optional = markInject(makeParamDecorator('Optional'), InjectFlags.Optional);

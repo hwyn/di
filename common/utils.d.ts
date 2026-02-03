@@ -24,6 +24,8 @@ export declare const InstantiationPolicy: {
         warn: (msg: string) => void;
         log?: (msg: string) => void;
     } | null;
+    /** Default async resolution timeout in ms */
+    TIMEOUT: number;
     /** If true, treating async onInit in sync instantiation as a fatal error. */
     strictAsyncLifecycle: boolean;
     /** If true, prohibits adding providers to an already resolved multi-token. */

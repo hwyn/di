@@ -38,6 +38,8 @@ export const DEBUG_MODE = { enabled: false };
  */
 export const InstantiationPolicy = {
     logger: (typeof console !== 'undefined' ? console : null),
+    /** Default async resolution timeout in ms */
+    TIMEOUT: 10000,
     /** If true, treating async onInit in sync instantiation as a fatal error. */
     strictAsyncLifecycle: true,
     /** If true, prohibits adding providers to an already resolved multi-token. */

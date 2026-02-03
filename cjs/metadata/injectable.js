@@ -19,7 +19,10 @@ var setInjectableDef = function (type, opt) {
     return (0, metadata_keys_1.setInjectableDef)(type, def);
 };
 exports.setInjectableDef = setInjectableDef;
-exports.Injectable = (0, decorators_1.makeDecorator)('Injectable', function (opt) { return opt; }, exports.setInjectableDef);
+exports.Injectable = (0, decorators_1.makeDecorator)('Injectable', function (opt) { return opt; }, function (target, _a) {
+    var args = _a.args;
+    return exports.setInjectableDef.apply(void 0, tslib_1.__spreadArray([target], tslib_1.__read(args), false));
+});
 var resolveToken = function (token, opt) { return (tslib_1.__assign(tslib_1.__assign({}, opt), { token: token })); };
 exports.Inject = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Inject', resolveToken), constants_1.DecoratorFlags.Inject);
 exports.Optional = (0, decorators_1.markInject)((0, decorators_1.makeParamDecorator)('Optional'), constants_1.InjectFlags.Optional);

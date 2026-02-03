@@ -45,7 +45,7 @@ function makeMetadataFactory(name, props, adapter) {
 export function makeDecorator(name, props, typeFn) {
     function TypeDecorator(instance, args, cls) {
         getPropertyValue(cls, ANNOTATIONS).push(instance);
-        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, ...args);
+        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, { metadata: instance, args });
         return cls;
     }
     return makeMetadataFactory(name, props, TypeDecorator);
@@ -58,7 +58,7 @@ export function makeParamDecorator(name, props, typeFn) {
             ? { method: propertyKey || 'constructor', index: indexOrDescriptor, annotationInstance: instance }
             : { prop: propertyKey, descriptor: indexOrDescriptor, annotationInstance: instance };
         getPropertyValue(cls, isParam ? PARAMETERS : PROP_METADATA).unshift(metadata);
-        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, propertyKey, indexOrDescriptor, ...args);
+        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, propertyKey, indexOrDescriptor, { metadata: instance, args });
     }
     return makeMetadataFactory(name, props, ParamDecorator);
 }
@@ -71,7 +71,7 @@ export function makeMethodDecorator(name, props, typeFn) {
             descriptor.value = function (...args) { return nativeMethods[method].apply(this, args); };
         }
         getPropertyValue(cls, METHODS).push({ method, descriptor, annotationInstance: instance });
-        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, method, descriptor, ...args);
+        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, method, descriptor, { metadata: instance, args });
     }
     return makeMetadataFactory(name, props, MethodDecorator);
 }

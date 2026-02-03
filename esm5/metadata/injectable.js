@@ -2,7 +2,7 @@
  * @file meta/injectable.ts
  * @description Defines the @Injectable and @Inject decorators and relevant configuration options.
  */
-import { __assign } from "tslib";
+import { __assign, __read, __spreadArray } from "tslib";
 import { DecoratorFlags, InjectFlags, ROOT_SCOPE } from "./constants.js";
 import { makeDecorator, makeParamDecorator, markInject } from "./decorators.js";
 import { setInjectableDef as _setInjectableDef } from "./metadata-keys.js";
@@ -15,7 +15,10 @@ export var setInjectableDef = function (type, opt) {
     }
     return _setInjectableDef(type, def);
 };
-export var Injectable = makeDecorator('Injectable', function (opt) { return opt; }, setInjectableDef);
+export var Injectable = makeDecorator('Injectable', function (opt) { return opt; }, function (target, _a) {
+    var args = _a.args;
+    return setInjectableDef.apply(void 0, __spreadArray([target], __read(args), false));
+});
 var resolveToken = function (token, opt) { return (__assign(__assign({}, opt), { token: token })); };
 export var Inject = markInject(makeParamDecorator('Inject', resolveToken), DecoratorFlags.Inject);
 export var Optional = markInject(makeParamDecorator('Optional'), InjectFlags.Optional);

@@ -104,7 +104,7 @@ function installTokenHooks(token, isDecorator) {
         },
         onAllow: function (_token, provider) {
             var _a;
-            if (provider && isDecorator) {
+            if (token !== provider && isDecorator) {
                 var name = token.name || token.toString();
                 (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn("[DI Warning] \u26A0\uFE0F Explicit provider overrides implicit @Token binding: ".concat(name));
             }

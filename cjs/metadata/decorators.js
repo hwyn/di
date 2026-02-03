@@ -65,7 +65,7 @@ function makeMetadataFactory(name, props, adapter) {
 function makeDecorator(name, props, typeFn) {
     function TypeDecorator(instance, args, cls) {
         getPropertyValue(cls, exports.ANNOTATIONS).push(instance);
-        typeFn === null || typeFn === void 0 ? void 0 : typeFn.apply(void 0, tslib_1.__spreadArray([cls], tslib_1.__read(args), false));
+        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, { metadata: instance, args: args });
         return cls;
     }
     return makeMetadataFactory(name, props, TypeDecorator);
@@ -78,7 +78,7 @@ function makeParamDecorator(name, props, typeFn) {
             ? { method: propertyKey || 'constructor', index: indexOrDescriptor, annotationInstance: instance }
             : { prop: propertyKey, descriptor: indexOrDescriptor, annotationInstance: instance };
         getPropertyValue(cls, isParam ? exports.PARAMETERS : exports.PROP_METADATA).unshift(metadata);
-        typeFn === null || typeFn === void 0 ? void 0 : typeFn.apply(void 0, tslib_1.__spreadArray([cls, propertyKey, indexOrDescriptor], tslib_1.__read(args), false));
+        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, propertyKey, indexOrDescriptor, { metadata: instance, args: args });
     }
     return makeMetadataFactory(name, props, ParamDecorator);
 }
@@ -97,7 +97,7 @@ function makeMethodDecorator(name, props, typeFn) {
             };
         }
         getPropertyValue(cls, exports.METHODS).push({ method: method, descriptor: descriptor, annotationInstance: instance });
-        typeFn === null || typeFn === void 0 ? void 0 : typeFn.apply(void 0, tslib_1.__spreadArray([cls, method, descriptor], tslib_1.__read(args), false));
+        typeFn === null || typeFn === void 0 ? void 0 : typeFn(cls, method, descriptor, { metadata: instance, args: args });
     }
     return makeMetadataFactory(name, props, MethodDecorator);
 }

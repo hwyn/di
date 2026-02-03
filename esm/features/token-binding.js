@@ -78,7 +78,7 @@ function installTokenHooks(token, isDecorator) {
         },
         onAllow: (_token, provider) => {
             var _a;
-            if (provider && isDecorator) {
+            if (token !== provider && isDecorator) {
                 const name = token.name || token.toString();
                 (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(`[DI Warning] ⚠️ Explicit provider overrides implicit @Token binding: ${name}`);
             }
