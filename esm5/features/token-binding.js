@@ -1,18 +1,7 @@
 import { __values } from "tslib";
-/**
- * @file token-binding.ts
- * @description Dependency Injection Token Binding System
- *
- * Manages the registration and resolution strategies for DI Tokens.
- * Implements a "Smart Factory" pattern that:
- * 1. Supports both Single and Multi-provider bindings
- * 2. Handles Scope-based filtering (Root vs Component scopes)
- * 3. Adapts to Sync and Async resolution modes automatically
- * 4. Provides high-performance lookups using WeakMaps and closure caching
- */
 import { setInjectableDef, ROOT_SCOPE, getInjectableDef, ResolveMode, InjectFlags } from "../metadata/index.js";
 import { HookMetadata, INJECTOR_SCOPE } from "../registry/index.js";
-import { deepForEach, InstantiationPolicy } from "../common/index.js";
+import { deepForEach, InstantiationPolicy, getSecureTokenName } from "../common/index.js";
 import { resolveMulti, resolveMultiAsync } from "../resolution/index.js";
 var TOKEN_BINDING_STATE = new WeakMap();
 var FactoryBuilder = {
@@ -105,14 +94,13 @@ function installTokenHooks(token, isDecorator) {
         onAllow: function (_token, provider) {
             var _a;
             if (token !== provider && isDecorator) {
-                var name = token.name || token.toString();
+                var name = getSecureTokenName(token);
                 (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn("[DI Warning] \u26A0\uFE0F Explicit provider overrides implicit @Token binding: ".concat(name));
             }
             return true;
         }
     });
 }
-// Register debug tools
 InstantiationPolicy.registerDebugTools({
     inspectToken: function (token) {
         var state = TOKEN_BINDING_STATE.get(token);
@@ -129,6 +117,26 @@ InstantiationPolicy.registerDebugTools({
         TOKEN_BINDING_STATE.delete(token);
     }
 });
+/**
+ * Programmatically registers one or more providers into the token-binding system.
+ *
+ * This is the imperative counterpart to `@Token()` / `@MultiToken()` decorators.
+ * Registered providers are resolved lazily when the token is first requested from
+ * an injector whose scope matches.
+ *
+ * @param input - A provider or array of providers to register.
+ * @param scope - Scope for the registration (defaults to `'root'`).
+ * @param isDecorator - @internal Whether this call originates from a decorator (affects warnings).
+ *
+ * @example
+ * ```ts
+ * register({ provide: API_TOKEN, useValue: '/api/v2' });
+ * register([
+ *   { provide: PLUGIN, multi: true, useClass: AuthPlugin },
+ *   { provide: PLUGIN, multi: true, useClass: LogPlugin },
+ * ], 'root');
+ * ```
+ */
 export function register(input, scope, isDecorator) {
     if (scope === void 0) { scope = ROOT_SCOPE; }
     if (isDecorator === void 0) { isDecorator = false; }
@@ -154,10 +162,12 @@ export function register(input, scope, isDecorator) {
         var state = TOKEN_BINDING_STATE.get(token);
         var existingMode = state.mode;
         if (isMulti && existingMode !== 'multi') {
-            throw new Error("[DI Error] Token '".concat(token, "' is Single, cannot add Multi provider."));
+            var msg = "[DI Error] Token '".concat(token, "' is Single, cannot add Multi provider.");
+            throw new Error(msg);
         }
         if (!isMulti && existingMode === 'multi') {
-            throw new Error("[DI Error] Token '".concat(token, "' is Multi, cannot add Single provider."));
+            var msg = "[DI Error] Token '".concat(token, "' is Multi, cannot add Single provider.");
+            throw new Error(msg);
         }
         if (existingMode === 'single') {
             if (state.registry.size > 0 && isDecorator) {
@@ -178,17 +188,62 @@ function validateBinding(target, scope, token) {
         (_b = InstantiationPolicy.logger) === null || _b === void 0 ? void 0 : _b.warn("[DI Warning] Scope mismatch: '".concat(target.name, "' is '").concat(def.scope, "' but Token '").concat(String(token), "' is '").concat(scope, "'."));
     }
 }
+/**
+ * Class decorator that binds a class to an `InjectorToken` as a single-value provider.
+ *
+ * When the token is resolved, the DI system returns this class's instance.
+ * If another class also decorates with the same token, the later one overwrites
+ * (with a dev-mode warning).
+ *
+ * @param token - The InjectorToken to bind to.
+ * @param scope - Scope for the binding (defaults to `'root'`).
+ * @returns A class decorator.
+ *
+ * @example
+ * ```ts
+ * const CACHE = InjectorToken.get<CacheService>('CACHE');
+ *
+ * @Token(CACHE)
+ * @Injectable()
+ * class RedisCacheService implements CacheService { ... }
+ * ```
+ */
 export function Token(token, scope) {
     if (scope === void 0) { scope = ROOT_SCOPE; }
     return function (target) {
         validateBinding(target, scope, token);
-        register({ provide: token, useClass: target }, scope, true);
+        register({ provide: token, useExisting: target }, scope, true);
     };
 }
+/**
+ * Class decorator that binds a class to an `InjectorToken` as a multi-value provider.
+ *
+ * Multiple classes can bind to the same token; resolving yields an array of all
+ * registered implementations (scoped to the current injector's scope).
+ *
+ * @param token - The InjectorToken to bind to.
+ * @param scope - Scope for the binding (defaults to `'root'`).
+ * @returns A class decorator.
+ *
+ * @example
+ * ```ts
+ * const PLUGINS = InjectorToken.get<Plugin[]>('PLUGINS');
+ *
+ * @MultiToken(PLUGINS)
+ * @Injectable()
+ * class AuthPlugin implements Plugin { ... }
+ *
+ * @MultiToken(PLUGINS)
+ * @Injectable()
+ * class LogPlugin implements Plugin { ... }
+ *
+ * // Resolving PLUGINS returns [AuthPlugin, LogPlugin]
+ * ```
+ */
 export function MultiToken(token, scope) {
     if (scope === void 0) { scope = ROOT_SCOPE; }
     return function (target) {
         validateBinding(target, scope, token);
-        register({ provide: token, multi: true, useClass: target }, scope);
+        register({ provide: token, multi: true, useExisting: target }, scope);
     };
 }

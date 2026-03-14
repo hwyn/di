@@ -1,18 +1,21 @@
 {
 	"name": "@hwy-fm/di",
-	"version": "0.0.1-beta.9.1",
-	"description": "",
+	"version": "0.0.1-beta.9.3.3",
+	"description": "A lightweight, high-performance, and concurrency-safe Dependency Injection (DI) container for TypeScript and Node.js.",
 	"private": false,
-	"license": "ISC",
-	"author": "",
+	"license": "MIT",
+	"author": "hwyn (https://github.com/hwyn)",
+	"homepage": "https://github.com/hwyn",
 	"type": "module",
 	"main": "./cjs/index.js",
 	"module": "./esm5/index.js",
 	"import": "./esm/index.js",
 	"types": "./index.d.ts",
 	"exports": {
+		"./package.json": "./package.json",
 		".": {
 			"types": "./index.d.ts",
+			"browser": "./esm5/index.js",
 			"import": "./esm/index.js",
 			"node": "./cjs/index.js",
 			"require": "./cjs/index.js",
@@ -20,6 +23,7 @@
 		},
 		"./common": {
 			"types": "./common/index.d.ts",
+			"browser": "./esm5/common/index.js",
 			"import": "./esm/common/index.js",
 			"node": "./cjs/common/index.js",
 			"require": "./cjs/common/index.js",
@@ -27,6 +31,7 @@
 		},
 		"./common/*": {
 			"types": "./common/*.d.ts",
+			"browser": "./esm5/common/*.js",
 			"import": "./esm/common/*.js",
 			"node": "./cjs/common/*.js",
 			"require": "./cjs/common/*.js",
@@ -34,6 +39,7 @@
 		},
 		"./features": {
 			"types": "./features/index.d.ts",
+			"browser": "./esm5/features/index.js",
 			"import": "./esm/features/index.js",
 			"node": "./cjs/features/index.js",
 			"require": "./cjs/features/index.js",
@@ -41,6 +47,7 @@
 		},
 		"./features/*": {
 			"types": "./features/*.d.ts",
+			"browser": "./esm5/features/*.js",
 			"import": "./esm/features/*.js",
 			"node": "./cjs/features/*.js",
 			"require": "./cjs/features/*.js",
@@ -48,6 +55,7 @@
 		},
 		"./metadata": {
 			"types": "./metadata/index.d.ts",
+			"browser": "./esm5/metadata/index.js",
 			"import": "./esm/metadata/index.js",
 			"node": "./cjs/metadata/index.js",
 			"require": "./cjs/metadata/index.js",
@@ -55,6 +63,7 @@
 		},
 		"./metadata/*": {
 			"types": "./metadata/*.d.ts",
+			"browser": "./esm5/metadata/*.js",
 			"import": "./esm/metadata/*.js",
 			"node": "./cjs/metadata/*.js",
 			"require": "./cjs/metadata/*.js",
@@ -62,6 +71,7 @@
 		},
 		"./registry": {
 			"types": "./registry/index.d.ts",
+			"browser": "./esm5/registry/index.js",
 			"import": "./esm/registry/index.js",
 			"node": "./cjs/registry/index.js",
 			"require": "./cjs/registry/index.js",
@@ -69,6 +79,7 @@
 		},
 		"./registry/*": {
 			"types": "./registry/*.d.ts",
+			"browser": "./esm5/registry/*.js",
 			"import": "./esm/registry/*.js",
 			"node": "./cjs/registry/*.js",
 			"require": "./cjs/registry/*.js",
@@ -76,6 +87,7 @@
 		},
 		"./resolution": {
 			"types": "./resolution/index.d.ts",
+			"browser": "./esm5/resolution/index.js",
 			"import": "./esm/resolution/index.js",
 			"node": "./cjs/resolution/index.js",
 			"require": "./cjs/resolution/index.js",
@@ -83,17 +95,30 @@
 		},
 		"./resolution/*": {
 			"types": "./resolution/*.d.ts",
+			"browser": "./esm5/resolution/*.js",
 			"import": "./esm/resolution/*.js",
 			"node": "./cjs/resolution/*.js",
 			"require": "./cjs/resolution/*.js",
 			"default": "./esm5/resolution/*.js"
 		}
 	},
+	"files": [
+		"README.md",
+		"cjs",
+		"common",
+		"esm",
+		"esm5",
+		"features",
+		"index.d.ts",
+		"metadata",
+		"registry",
+		"resolution"
+	],
 	"scripts": {
 		"test": "echo 'Error: no test specified' && exit 1"
 	},
-	"dependencies": {
-		"reflect-metadata": "^0.2.2"
+	"publishConfig": {
+		"access": "public"
 	},
 	"sideEffects": true
 }

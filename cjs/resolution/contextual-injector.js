@@ -1,9 +1,4 @@
 "use strict";
-/**
- * @file resolution/contextual-injector.ts
- * @description A proxy injector used to propagate internal resolution state (like cycle detection stacks)
- * without exposing it to the public API or user factory functions.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContextualInjector = void 0;
 var ContextualInjector = /** @class */ (function () {

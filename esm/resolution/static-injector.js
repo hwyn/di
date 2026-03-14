@@ -1,11 +1,7 @@
-/**
- * @file impl/static-injector.ts
- * @description Concrete implementation of the Injector class (StaticInjector), managing scope and resolution.
- */
 import { __awaiter } from "tslib";
 import { getInjector, Injector, INJECTOR, INJECTOR_SCOPE, runInInjectionContext, INTERCEPTORS } from "../registry/index.js";
 import { InjectFlags, NO_VALUE, RecordFlags } from "../metadata/index.js";
-import { deepForEach, debugLog as log, DEBUG_MODE, enhanceError, InstantiationPolicy } from "../common/index.js";
+import { deepForEach, debugLog as log, DEBUG_MODE, enhanceError, InstantiationPolicy, getSecureTokenName } from "../common/index.js";
 import { dispose, instantiate, instantiateAsync, isDisposable } from "./instantiator.js";
 import { makeRecord, resolveMulti, composeInterceptors, resolveDefinition, resolveMultiAsync } from "./strategy.js";
 import { AsyncGovernance } from "./async-governance.js";
@@ -13,6 +9,27 @@ import { onTransientCheck, onDispose, onAdmission } from "./standard-hook.js";
 import { checkNoProvider, checkSelfAndOptional, validateResolution, validateSkipSelf } from "./resolution-checks.js";
 import { ContextualInjector } from "./contextual-injector.js";
 export { InjectFlags } from "../metadata/index.js";
+/**
+ * Batch-registers a potentially nested array of providers into an `Injector`.
+ *
+ * Flattens arbitrarily nested `Provider[]` and calls `injector.set()` for each
+ * entry. For providers with an explicit `provide` key ({@link AbstractProvider}),
+ * that key is used as the token; otherwise the provider itself is used as the token
+ * (i.e. a class reference acting as both token and implementation).
+ *
+ * @param injector - The target `Injector` instance to register providers into.
+ * @param providers - A provider array (may be nested or `null`/`undefined`).
+ *
+ * @example
+ * ```ts
+ * const injector = Injector.create([]);
+ * deepProviders(injector, [
+ *   Logger,
+ *   { provide: CONFIG_TOKEN, useValue: { debug: true } },
+ *   [CacheService, [NestedProvider]],
+ * ]);
+ * ```
+ */
 export function deepProviders(injector, providers) {
     deepForEach(providers, (item) => {
         var _a;
@@ -36,12 +53,12 @@ export class StaticInjector {
         this.interceptStrategy = composeInterceptors(localInterceptors, parentStrategy, this);
     }
     get(token, flags = InjectFlags.Default) {
-        DEBUG_MODE.enabled && log('get', token.name || token);
+        DEBUG_MODE.enabled && log('get', getSecureTokenName(token));
         const { value, record } = this.resolveBoundaryOrCache(token, flags, (p, f) => p.get(token, f));
         if (value !== NO_VALUE)
             return value;
         if (record) {
-            AsyncGovernance.enforceLock(record, token.name || token);
+            AsyncGovernance.enforceLock(record, token);
         }
         if (record === null)
             return this.tryParent(token, flags, null);
@@ -59,12 +76,14 @@ export class StaticInjector {
     }
     getAsync(token_1) {
         return __awaiter(this, arguments, void 0, function* (token, flags = InjectFlags.Default, resolutionStack = new Set()) {
-            DEBUG_MODE.enabled && log('getAsync', token.name || token);
+            DEBUG_MODE.enabled && log('getAsync', getSecureTokenName(token));
             const { value, record } = this.resolveBoundaryOrCache(token, flags, (p, f) => p.getAsync(token, f));
             if (value !== NO_VALUE)
                 return value;
             if (resolutionStack.has(token)) {
-                throw new Error(`Cyclic dependency detected in async resolution: ${Array.from(resolutionStack).map(t => t.name || t).join(' -> ')} -> ${token.name || token}`);
+                const chain = Array.from(resolutionStack).map(t => getSecureTokenName(t)).join(' -> ');
+                const msg = `Cyclic dependency detected in async resolution: ${chain} -> ${getSecureTokenName(token)}`;
+                throw new Error(msg);
             }
             if (record && record.resolving) {
                 return record.resolving;
@@ -97,7 +116,7 @@ export class StaticInjector {
         if (isMulti) {
             let record = this.records.get(token);
             if (record && (record.value !== NO_VALUE || record.resolving)) {
-                const msg = `[DI] Warning: Trying to add a provider to an already resolved multi-token '${token.name || token}'. This provider will be ignored.`;
+                const msg = `[DI] Warning: Trying to add a provider to an already resolved multi-token '${getSecureTokenName(token)}'. This provider will be ignored.`;
                 if (InstantiationPolicy.strictMultiInjection) {
                     throw new Error(msg.replace('Warning:', 'Error:'));
                 }
@@ -113,7 +132,8 @@ export class StaticInjector {
         else {
             const record = this.records.get(token);
             if (record && record.value !== NO_VALUE) {
-                throw new Error(`[DI] Error: Cannot overwrite provider for '${token.name || token}' because it has already been instantiated.`);
+                const msg = `[DI] Error: Cannot overwrite provider for '${getSecureTokenName(token)}' because it has already been instantiated.`;
+                throw new Error(msg);
             }
             this.records.set(token, { factory: undefined, value: NO_VALUE, multi: undefined, provider });
         }
@@ -164,17 +184,31 @@ export class StaticInjector {
         return this.records.get(token);
     }
     tryParent(token, flags, record) {
-        var _a;
         checkSelfAndOptional(token, flags, record);
-        return (_a = this.parent) === null || _a === void 0 ? void 0 : _a.get(token, flags | RecordFlags.MaskFromChild);
+        if (flags & InjectFlags.Self)
+            return null;
+        if (this.parent) {
+            return this.parent.get(token, flags | RecordFlags.MaskFromChild);
+        }
+        if (flags & InjectFlags.Optional)
+            return null;
+        const msg = `No provider for ${getSecureTokenName(token)}`;
+        throw new Error(msg);
     }
     tryParentAsync(token, flags, record, stack) {
-        var _a;
         checkSelfAndOptional(token, flags, record);
+        if (flags & InjectFlags.Self)
+            return Promise.resolve(null);
         if (this.parent instanceof StaticInjector && stack) {
             return this.parent.getAsync(token, flags | RecordFlags.MaskFromChild, stack);
         }
-        return (_a = this.parent) === null || _a === void 0 ? void 0 : _a.getAsync(token, flags | RecordFlags.MaskFromChild);
+        if (this.parent) {
+            return this.parent.getAsync(token, flags | RecordFlags.MaskFromChild);
+        }
+        if (flags & InjectFlags.Optional)
+            return Promise.resolve(null);
+        const msg = `No provider for ${getSecureTokenName(token)}`;
+        return Promise.reject(new Error(msg));
     }
     tryResolve(token, record, flags) {
         record = this.resolveRecord(token, record);
@@ -185,7 +219,8 @@ export class StaticInjector {
             return this.tryParent(token, flags, record);
         if (flags & InjectFlags.Optional)
             return null;
-        throw new Error(`No provider for ${token.name || token}`);
+        const msg = `No provider for ${getSecureTokenName(token)}`;
+        throw new Error(msg);
     }
     tryResolveAsync(token, record, flags, ctx = this) {
         record = this.resolveRecord(token, record);
@@ -193,12 +228,13 @@ export class StaticInjector {
         if (record)
             return this.hydrateAsync(token, record, ctx);
         if (this.parent) {
-            const stack = ctx instanceof ContextualInjector ? ctx.stack : undefined;
+            const stack = ctx instanceof ContextualInjector ? ctx['stack'] : undefined;
             return this.tryParentAsync(token, flags, record, stack);
         }
         if (flags & InjectFlags.Optional)
-            return null;
-        throw new Error(`No provider for ${token.name || token}`);
+            return Promise.resolve(null);
+        const msg = `No provider for ${getSecureTokenName(token)}`;
+        throw new Error(msg);
     }
     resolveRecord(token, record) {
         if (record === null)
@@ -210,7 +246,7 @@ export class StaticInjector {
         return resolved;
     }
     hydrateSync(token, record) {
-        AsyncGovernance.enforceLock(record, token.toString());
+        AsyncGovernance.enforceLock(record, token);
         const value = instantiate(token, record, this);
         if (value instanceof Promise && !(record.provider && 'useValue' in record.provider)) {
             AsyncGovernance.enforceSyncConstraint(token);
@@ -231,7 +267,8 @@ export class StaticInjector {
                 else if (isDisposable(value)) {
                     dispose(value);
                 }
-                throw new Error(`Injector destroyed during resolution of: ${token}`);
+                const msg = `Injector destroyed during resolution of: ${getSecureTokenName(token)}`;
+                throw new Error(msg);
             }
             return this.finishHydrate(token, record, value);
         });

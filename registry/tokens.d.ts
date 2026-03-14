@@ -1,9 +1,48 @@
-/**
- * @file registry/tokens.ts
- * @description Defines InjectionTokens used within the Registry/Resolution layers.
- */
 import { InjectorToken } from '../metadata';
-export declare const INJECTOR: InjectorToken;
-export declare const INJECTOR_SCOPE: InjectorToken;
-export declare const INJECTOR_ENV: InjectorToken;
-export declare const INTERCEPTORS: InjectorToken;
+import type { InterceptorFn } from './types';
+/**
+ * Built-in token that resolves to the current `Injector` instance.
+ *
+ * In most cases you can inject the `Injector` class directly (`Injector` already has
+ * a built-in `__prov_def__`). This token is mainly useful for programmatic resolution
+ * in non-decorator scenarios.
+ *
+ * @example
+ * ```ts
+ * // Inject via class reference (recommended)
+ * @Inject(Injector) private injector!: Injector;
+ *
+ * // Programmatic resolution
+ * const injector = parentInjector.get(INJECTOR);
+ * ```
+ */
+export declare const INJECTOR: InjectorToken<import("./injector").Injector>;
+/**
+ * Built-in token that resolves to the scope identifier of the current injector.
+ *
+ * Returns values like `'root'`, `'request'`, or custom scope names.
+ */
+export declare const INJECTOR_SCOPE: InjectorToken<string>;
+/**
+ * Built-in token that resolves to the environment identifier of the current injector.
+ *
+ * Environment tags enable conditional provider registration (e.g. `'test'`, `'production'`).
+ */
+export declare const INJECTOR_ENV: InjectorToken<string>;
+/**
+ * Built-in multi-token for interceptor functions.
+ *
+ * Interceptors are invoked sequentially after each instance creation, allowing
+ * cross-cutting concerns (logging, AOP, proxy wrapping) to be applied globally.
+ *
+ * @example
+ * ```ts
+ * Injector.create([
+ *   { provide: INTERCEPTORS, useValue: (instance, token, injector) => {
+ *     console.log(`Created: ${token}`);
+ *     return instance;
+ *   }}
+ * ]);
+ * ```
+ */
+export declare const INTERCEPTORS: InjectorToken<InterceptorFn[]>;

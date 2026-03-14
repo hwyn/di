@@ -1,8 +1,4 @@
 "use strict";
-/**
- * @file impl/lifecycle.ts
- * @description Helper functions for object instantiation and disposal (lifecycle management).
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isDisposable = isDisposable;
 exports.dispose = dispose;
@@ -17,7 +13,7 @@ var common_1 = require("../common");
 var standard_hook_1 = require("./standard-hook");
 var cyclic_1 = require("./cyclic");
 function getTokenName(token) {
-    return token.name || (typeof token === 'string' ? token : token.toString());
+    return (0, common_1.getSecureTokenName)(token);
 }
 function resolveMetadata(token, record) {
     if (record.metadata)
@@ -29,7 +25,7 @@ function resolveMetadata(token, record) {
     return metadata;
 }
 function hasOnInit(instance) {
-    return instance && typeof instance.onInit === 'function';
+    return !!instance && typeof instance.onInit === 'function';
 }
 function reportAsyncLeak(token) {
     var _a;
@@ -41,7 +37,7 @@ function reportAsyncLeak(token) {
     (_a = common_1.InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(msg);
 }
 function isDisposable(instance) {
-    return instance && typeof instance.destroy === 'function';
+    return !!instance && typeof instance.destroy === 'function';
 }
 function dispose(instance) {
     if (isDisposable(instance)) {
@@ -104,9 +100,10 @@ function applyInterceptorSync(instance, token, ctx) {
         return instance;
     var result = strategy(instance, token);
     if (result && typeof result.then === 'function') {
-        throw new Error("[DI] Error: Interceptor for '".concat(getTokenName(token), "' returned a Promise in a synchronous resolution context. This is not allowed."));
+        var msg = "[DI] Error: Interceptor for '".concat(getTokenName(token), "' returned a Promise in a synchronous resolution context. This is not allowed.");
+        throw new Error(msg);
     }
-    return result || instance;
+    return result !== undefined ? result : instance;
 }
 function instantiateAsync(token, record, ctx) {
     return tslib_1.__awaiter(this, void 0, Promise, function () {
@@ -125,29 +122,29 @@ function executeInstantiationAsync(token, record, ctx) {
     return tslib_1.__awaiter(this, void 0, Promise, function () {
         var metadata, instance_2, result, instance, baseFactory, effectiveFactory, e_1, result, e_2;
         var _this = this;
-        var _a, _b, _c;
-        return tslib_1.__generator(this, function (_d) {
-            switch (_d.label) {
+        var _a, _b, _c, _d, _e;
+        return tslib_1.__generator(this, function (_f) {
+            switch (_f.label) {
                 case 0:
                     metadata = resolveMetadata(token, record);
                     if (!!metadata) return [3 /*break*/, 4];
                     return [4 /*yield*/, record.factory(ctx, metadata_1.ResolveMode.Async)];
                 case 1:
-                    instance_2 = _d.sent();
+                    instance_2 = _f.sent();
                     if (!hasOnInit(instance_2)) return [3 /*break*/, 3];
                     result = instance_2.onInit();
                     if (!(result instanceof Promise)) return [3 /*break*/, 3];
                     return [4 /*yield*/, result];
                 case 2:
-                    _d.sent();
-                    _d.label = 3;
+                    _f.sent();
+                    _f.label = 3;
                 case 3: return [2 /*return*/, instance_2];
                 case 4:
                     if (!((_a = metadata.beforeListeners) === null || _a === void 0 ? void 0 : _a.length)) return [3 /*break*/, 6];
                     return [4 /*yield*/, (0, standard_hook_1.runBeforeAsync)(token, record, ctx)];
                 case 5:
-                    _d.sent();
-                    _d.label = 6;
+                    _f.sent();
+                    _f.label = 6;
                 case 6:
                     baseFactory = function () { return tslib_1.__awaiter(_this, void 0, void 0, function () { return tslib_1.__generator(this, function (_a) {
                         return [2 /*return*/, record.factory(ctx, metadata_1.ResolveMode.Async)];
@@ -156,45 +153,47 @@ function executeInstantiationAsync(token, record, ctx) {
                         ? function () { return metadata.customFactory(record, baseFactory, ctx); }
                         : baseFactory;
                     if (!((_b = metadata.errorHandlers) === null || _b === void 0 ? void 0 : _b.length)) return [3 /*break*/, 11];
-                    _d.label = 7;
+                    _f.label = 7;
                 case 7:
-                    _d.trys.push([7, 9, , 10]);
+                    _f.trys.push([7, 9, , 10]);
                     return [4 /*yield*/, effectiveFactory()];
                 case 8:
-                    instance = _d.sent();
+                    instance = _f.sent();
                     return [3 /*break*/, 10];
                 case 9:
-                    e_1 = _d.sent();
+                    e_1 = _f.sent();
                     instance = (0, standard_hook_1.runError)(token, e_1, record, ctx);
                     return [3 /*break*/, 10];
                 case 10: return [3 /*break*/, 13];
                 case 11: return [4 /*yield*/, effectiveFactory()];
                 case 12:
-                    instance = _d.sent();
-                    _d.label = 13;
+                    instance = _f.sent();
+                    _f.label = 13;
                 case 13:
-                    _d.trys.push([13, 18, , 19]);
+                    _f.trys.push([13, 18, , 19]);
                     if (!((_c = metadata.afterListeners) === null || _c === void 0 ? void 0 : _c.length)) return [3 /*break*/, 15];
                     return [4 /*yield*/, (0, standard_hook_1.runAfterAsync)(token, instance, record, ctx)];
                 case 14:
-                    _d.sent();
-                    _d.label = 15;
+                    _f.sent();
+                    _f.label = 15;
                 case 15:
                     if (!hasOnInit(instance)) return [3 /*break*/, 17];
                     result = instance.onInit();
                     if (!(result instanceof Promise)) return [3 /*break*/, 17];
                     return [4 /*yield*/, result];
                 case 16:
-                    _d.sent();
-                    _d.label = 17;
+                    _f.sent();
+                    _f.label = 17;
                 case 17: return [3 /*break*/, 19];
                 case 18:
-                    e_2 = _d.sent();
+                    e_2 = _f.sent();
                     if (instance && isDisposable(instance)) {
                         try {
                             dispose(instance);
                         }
-                        catch (e) { /* clean rollback */ }
+                        catch (disposeErr) {
+                            (_e = (_d = common_1.InstantiationPolicy.logger) === null || _d === void 0 ? void 0 : _d.warn) === null || _e === void 0 ? void 0 : _e.call(_d, '[DI] Rollback disposal failed: ' + (disposeErr instanceof Error ? disposeErr.message : disposeErr));
+                        }
                     }
                     throw e_2;
                 case 19: return [2 /*return*/, instance];
@@ -204,7 +203,7 @@ function executeInstantiationAsync(token, record, ctx) {
 }
 function applyInterceptorAsync(instance, token, ctx) {
     return tslib_1.__awaiter(this, void 0, Promise, function () {
-        var strategy, result;
+        var strategy, result, awaited;
         return tslib_1.__generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -214,8 +213,10 @@ function applyInterceptorAsync(instance, token, ctx) {
                     result = strategy(instance, token);
                     if (!(result && typeof result.then === 'function')) return [3 /*break*/, 2];
                     return [4 /*yield*/, result];
-                case 1: return [2 /*return*/, (_a.sent()) || instance];
-                case 2: return [2 /*return*/, result || instance];
+                case 1:
+                    awaited = _a.sent();
+                    return [2 /*return*/, awaited !== undefined ? awaited : instance];
+                case 2: return [2 /*return*/, result !== undefined ? result : instance];
             }
         });
     });

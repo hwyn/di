@@ -1,8 +1,3 @@
-/**
- * @file resolution/contextual-injector.ts
- * @description A proxy injector used to propagate internal resolution state (like cycle detection stacks)
- * without exposing it to the public API or user factory functions.
- */
 var ContextualInjector = /** @class */ (function () {
     function ContextualInjector(parent, stack) {
         this.parent = parent;

@@ -1,11 +1,25 @@
-/**
- * @file features/method.proxy.ts
- * @description Experimental feature for AOP-style method interception and proxying.
- */
 import { __decorate, __read, __spreadArray } from "tslib";
 import { resolveParams } from "../resolution/index.js";
 import { Injectable, IS_PROXY, NATIVE_METHOD, Reflector } from "../metadata/index.js";
 var SYSTEM_CALL_MARKER = Symbol('__DI_SYS_CALL__');
+/**
+ * Service that creates DI-aware proxies for class methods.
+ *
+ * When a method has parameter-level DI annotations (e.g. `@Inject`, `@Optional`),
+ * `MethodProxy` wraps the method so that annotated parameters are auto-resolved
+ * from the injection context at call-time.
+ *
+ * Used internally by the framework to power method-level parameter injection and
+ * similar patterns where method parameters need runtime DI resolution.
+ *
+ * @example
+ * ```ts
+ * const proxy = injector.get(MethodProxy);
+ * const invoker = proxy.createSystemInvoker(serviceInstance, 'execute');
+ * // calling invoker() auto-resolves DI params and passes a system-call marker
+ * const result = invoker('arg1', 'arg2');
+ * ```
+ */
 var MethodProxy = /** @class */ (function () {
     function MethodProxy() {
         this.SYSTEM_CALL_MARKER = SYSTEM_CALL_MARKER;
@@ -26,6 +40,8 @@ var MethodProxy = /** @class */ (function () {
         var agent = instance[method];
         var ctor = (_a = Object.getPrototypeOf(instance)) === null || _a === void 0 ? void 0 : _a.constructor;
         if (!ctor || typeof agent !== 'function')
+            return agent;
+        if (agent[IS_PROXY])
             return agent;
         var annotations = Reflector.resolveParameterAnnotations(ctor, method);
         if (!annotations || !annotations.length)

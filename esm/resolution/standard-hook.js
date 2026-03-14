@@ -1,7 +1,3 @@
-/**
- * @file university/di/resolution/standard-hook.ts
- * @description Standard implementations for Metadata-Driven Hooks.
- */
 import { __awaiter } from "tslib";
 import { HookMetadata } from "../registry/index.js";
 import { InstantiationPolicy } from "../common/index.js";

@@ -1,12 +1,32 @@
 "use strict";
-/**
- * @file university/di/registry/hook-metadata.ts
- * @description Utilities and metadata definitions for the Metadata-Driven Hook system.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HookMetadata = exports.DI_HOOK_METADATA = void 0;
 var tslib_1 = require("tslib");
+var common_1 = require("../common");
 exports.DI_HOOK_METADATA = Symbol.for('__di_hook_metadata__');
+/**
+ * Registry for token-level lifecycle hooks.
+ *
+ * `HookMetadata` attaches lifecycle callbacks to injection tokens. These hooks
+ * run at specific points during resolution (scope check, factory override,
+ * before/after instantiation, error handling, disposal).
+ *
+ * Each token can have at most one `onScopeCheck`, `onTransientCheck`, `onAllow`,
+ * and `customFactory`. Multiple `before`, `after`, `onError`, and `onDispose`
+ * listeners are supported and sorted by `order`.
+ *
+ * @example
+ * ```ts
+ * HookMetadata.hook(CacheService, {
+ *   customFactory: (record, next, ctx) => {
+ *     const cache = next();
+ *     cache.setCapacity(100);
+ *     return cache;
+ *   },
+ *   onDispose: (cache) => cache.clear(),
+ * });
+ * ```
+ */
 var HookMetadata = /** @class */ (function () {
     function HookMetadata() {
     }
@@ -16,23 +36,31 @@ var HookMetadata = /** @class */ (function () {
             return;
         var store = HookMetadata.getWritableStore(target);
         if (options.onScopeCheck) {
-            if (store.onScopeCheck)
-                throw new Error("[HookMetadata] Duplicate scope strategy on ".concat(target.name));
+            if (store.onScopeCheck) {
+                var msg = "[HookMetadata] Duplicate scope strategy on ".concat((0, common_1.getSecureTokenName)(target));
+                throw new Error(msg);
+            }
             store.onScopeCheck = options.onScopeCheck;
         }
         if (options.onTransientCheck !== undefined) {
-            if (store.onTransientCheck !== undefined)
-                throw new Error("[HookMetadata] Duplicate transient strategy on ".concat(target.name));
+            if (store.onTransientCheck !== undefined) {
+                var msg = "[HookMetadata] Duplicate transient strategy on ".concat((0, common_1.getSecureTokenName)(target));
+                throw new Error(msg);
+            }
             store.onTransientCheck = options.onTransientCheck;
         }
         if (options.onAllow) {
-            if (store.onAllow)
-                throw new Error("[HookMetadata] Duplicate allow strategy on ".concat(target.name));
+            if (store.onAllow) {
+                var msg = "[HookMetadata] Duplicate allow strategy on ".concat((0, common_1.getSecureTokenName)(target));
+                throw new Error(msg);
+            }
             store.onAllow = options.onAllow;
         }
         if (options.customFactory) {
-            if (store.customFactory)
-                throw new Error("[HookMetadata] Duplicate factory strategy on ".concat(target.name));
+            if (store.customFactory) {
+                var msg = "[HookMetadata] Duplicate factory strategy on ".concat((0, common_1.getSecureTokenName)(target));
+                throw new Error(msg);
+            }
             store.customFactory = options.customFactory;
         }
         var order = (_a = options.order) !== null && _a !== void 0 ? _a : 0;

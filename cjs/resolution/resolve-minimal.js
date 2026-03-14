@@ -1,8 +1,4 @@
 "use strict";
-/**
- * @file impl/resolve-minimal.ts
- * @description Provides a lightweight, standalone resolution mechanism (useful for testing or simple scopes).
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveMinimal = resolveMinimal;
 exports.resolveMinimalAsync = resolveMinimalAsync;
@@ -13,17 +9,40 @@ var instantiator_1 = require("./instantiator");
 var strategy_1 = require("./strategy");
 var standard_hook_1 = require("./standard-hook");
 var NOOP = function () { };
-function findParentRecord(cursor, t) {
+function findParentRecord(cursor, token) {
     var _a;
-    while (cursor) {
-        var r = (_a = cursor.getRecord) === null || _a === void 0 ? void 0 : _a.call(cursor, t);
+    var current = cursor;
+    while (current) {
+        var r = (_a = current.getRecord) === null || _a === void 0 ? void 0 : _a.call(current, token);
         if (r && !((r.flags || 0) & metadata_1.RecordFlags.Private)) {
             return r;
         }
-        cursor = cursor.parent;
+        current = current.parent;
     }
     return undefined;
 }
+/**
+ * Resolves a token in a lightweight sandbox without creating a full `Injector`.
+ *
+ * Returns a tuple `[instance, disposeFn]` where `disposeFn` cleans up all
+ * instances created during this resolution. Useful for one-off resolutions
+ * (e.g. tests, CLI commands) where a full injector lifecycle is not needed.
+ *
+ * @typeParam T - The expected instance type.
+ * @param token - The token to resolve.
+ * @param parent - Optional parent injector for fallback lookups.
+ * @returns A tuple of `[instance, dispose]`.
+ *
+ * @example
+ * ```ts
+ * const [service, dispose] = resolveMinimal(MyService, rootInjector);
+ * try {
+ *   service.doWork();
+ * } finally {
+ *   dispose();  // cleanup
+ * }
+ * ```
+ */
 function resolveMinimal(token, parent) {
     var cache = new Map();
     var active = [];
@@ -33,20 +52,21 @@ function resolveMinimal(token, parent) {
         destroyed: false,
         get: function (t) { return resolve(t); },
     };
+    var injector = sandbox;
     function resolve(t) {
         if (t === registry_1.INJECTOR)
-            return sandbox;
+            return injector;
         var c = cache.get(t);
         if (c !== undefined)
             return c;
         var r = findParentRecord(parent, t);
-        var record = (0, strategy_1.resolveDefinition)(t, r, metadata_1.IGNORE_SCOPE, sandbox);
+        var record = (0, strategy_1.resolveDefinition)(t, r, metadata_1.IGNORE_SCOPE, injector);
         if (!record)
             return null;
-        if ((0, standard_hook_1.onTransientCheck)(t, record, sandbox)) {
-            return (0, instantiator_1.instantiate)(t, record, sandbox);
+        if ((0, standard_hook_1.onTransientCheck)(t, record, injector)) {
+            return (0, instantiator_1.instantiate)(t, record, injector);
         }
-        var val = (0, instantiator_1.instantiate)(t, record, sandbox);
+        var val = (0, instantiator_1.instantiate)(t, record, injector);
         if (record.multi) {
             val.forEach(function (v) { return (0, instantiator_1.isDisposable)(v) && active.push({ instance: v, token: t }); });
         }
@@ -55,14 +75,14 @@ function resolveMinimal(token, parent) {
         }
         if (val != null)
             cache.set(t, val);
-        return val || null;
+        return val !== null && val !== void 0 ? val : null;
     }
-    return (0, registry_1.runInInjectionContext)(sandbox, function () {
+    return (0, registry_1.runInInjectionContext)(injector, function () {
         return [resolve(token), function () {
                 var promises = [];
                 while (active.length) {
-                    var _a = active.pop(), instance = _a.instance, token_1 = _a.token;
-                    var ret = (0, standard_hook_1.onDispose)(token_1, instance, sandbox);
+                    var _a = active.pop(), instance = _a.instance, tk = _a.token;
+                    var ret = (0, standard_hook_1.onDispose)(tk, instance, injector);
                     if (ret instanceof Promise)
                         promises.push(ret);
                     var p = (0, instantiator_1.dispose)(instance);
@@ -74,6 +94,7 @@ function resolveMinimal(token, parent) {
             }];
     });
 }
+/** Async version of resolveMinimal. */
 function resolveMinimalAsync(token, parent) {
     return tslib_1.__awaiter(this, void 0, Promise, function () {
         function resolve(t) {
@@ -83,24 +104,22 @@ function resolveMinimalAsync(token, parent) {
                     switch (_a.label) {
                         case 0:
                             if (t === registry_1.INJECTOR)
-                                return [2 /*return*/, sandbox];
+                                return [2 /*return*/, injector];
                             c = cache.get(t);
                             if (c !== undefined)
                                 return [2 /*return*/, c];
                             r = findParentRecord(parent, t);
-                            record = (0, strategy_1.resolveDefinition)(t, r, metadata_1.IGNORE_SCOPE, sandbox);
+                            record = (0, strategy_1.resolveDefinition)(t, r, metadata_1.IGNORE_SCOPE, injector);
                             if (!record)
                                 return [2 /*return*/, null];
-                            if ((0, standard_hook_1.onTransientCheck)(t, record, sandbox)) {
-                                return [2 /*return*/, (0, instantiator_1.instantiateAsync)(t, record, sandbox)];
+                            if ((0, standard_hook_1.onTransientCheck)(t, record, injector)) {
+                                return [2 /*return*/, (0, instantiator_1.instantiateAsync)(t, record, injector)];
                             }
-                            valPromise = (0, instantiator_1.instantiateAsync)(t, record, sandbox);
+                            valPromise = (0, instantiator_1.instantiateAsync)(t, record, injector);
                             cache.set(t, valPromise);
                             return [4 /*yield*/, valPromise];
                         case 1:
                             val = _a.sent();
-                            // Update cache with value if desired, or leave promise. Leaving promise is standard for simple async caches to avoid race conditions.
-                            // However, for active tracking we need the instance.
                             if (val && typeof val === 'object' && ((0, instantiator_1.isDisposable)(val) || record.flags === metadata_1.RecordFlags.Private)) {
                                 active.push({ instance: val, token: t });
                             }
@@ -109,7 +128,7 @@ function resolveMinimalAsync(token, parent) {
                 });
             });
         }
-        var cache, active, sandbox;
+        var cache, active, sandbox, injector;
         var _this = this;
         return tslib_1.__generator(this, function (_a) {
             cache = new Map();
@@ -121,7 +140,8 @@ function resolveMinimalAsync(token, parent) {
                 get: function (t) { return resolve(t); },
                 getAsync: function (t) { return resolve(t); },
             };
-            return [2 /*return*/, (0, registry_1.runInInjectionContext)(sandbox, function () { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+            injector = sandbox;
+            return [2 /*return*/, (0, registry_1.runInInjectionContext)(injector, function () { return tslib_1.__awaiter(_this, void 0, void 0, function () {
                     var instance;
                     var _this = this;
                     return tslib_1.__generator(this, function (_a) {
@@ -138,7 +158,7 @@ function resolveMinimalAsync(token, parent) {
                                                         while (active.length) {
                                                             item = active.pop();
                                                             cache.delete(item.token);
-                                                            h = (0, standard_hook_1.onDispose)(item.token, item.instance, sandbox);
+                                                            h = (0, standard_hook_1.onDispose)(item.token, item.instance, injector);
                                                             if (h instanceof Promise)
                                                                 promises.push(h);
                                                             d = (0, instantiator_1.dispose)(item.instance);

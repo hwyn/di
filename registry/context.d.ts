@@ -1,19 +1,49 @@
-/**
- * @file core/context.ts
- * @description Manages the current injection context, allowing for global access to the active injector.
- * Supports AsyncLocalStorage for Node.js environments to prevent context pollution in concurrent requests.
- */
 import { Injector } from './injector';
+import { TokenKey, ForwardRefFn } from '../metadata';
+/**
+ * Returns the currently active injector from the injection context, or `null` if none.
+ *
+ * In Node.js, this reads from `AsyncLocalStorage`. In the browser, from the global store.
+ * Typically used inside `runInInjectionContext()` callbacks.
+ */
 export declare function getInjector(): Injector | null;
 /**
- * Executes the given function inside the context of the injector.
- * Preferred over setInjector for async safety.
+ * Executes a function within the injection context of a specific injector.
+ *
+ * Inside `fn`, calls to `ɵɵInject()` and `getInjector()` return tokens resolved
+ * from the provided injector. In Node.js, context isolation uses `AsyncLocalStorage`,
+ * ensuring safety across async boundaries. In the browser, a global store is used
+ * (async safety requires Zone.js or explicit injector passing).
+ *
+ * @typeParam T - The return type of the callback.
+ * @param injector - The injector to activate as the current context.
+ * @param fn - The function to execute within the injection context.
+ * @returns The return value of `fn`.
+ *
+ * @example
+ * ```ts
+ * const value = runInInjectionContext(injector, () => {
+ *   return ɵɵInject(MyService);  // resolves from `injector`
+ * });
+ * ```
  */
 export declare function runInInjectionContext<T>(injector: Injector, fn: () => T): T;
 /**
- * Sets the current injector.
- * @deprecated Use runInInjectionContext instead for better async safety in Node.js.
+ * @internal
+ * Synchronously resolves a token from the current injection context.
+ * Used by generated code and internal framework machinery.
+ *
+ * @param token - The injection token or a `ForwardRefFn`.
+ * @param flags - Optional {@link InjectFlags}.
  */
-export declare function setInjector(active: Injector | null): Injector | null;
-export declare function ɵɵInject(token: any, flags?: any): any;
-export declare function ɵɵInjectAsync(token: any, flags?: any): Promise<any>;
+export declare function ɵɵInject(token: TokenKey | ForwardRefFn, flags?: number): unknown;
+/**
+ * @internal
+ * Asynchronously resolves a token from the current injection context.
+ * Used by generated code and internal framework machinery.
+ *
+ * @param token - The injection token or a `ForwardRefFn`.
+ * @param flags - Optional {@link InjectFlags}.
+ * @returns A Promise resolving to the instance.
+ */
+export declare function ɵɵInjectAsync(token: TokenKey | ForwardRefFn, flags?: number): Promise<any>;

@@ -7,6 +7,47 @@ A lightweight, high-performance, and concurrency-safe Dependency Injection (DI) 
 
 Designed for developers who love **Java Spring / Angular style** dependency injection but want a **module-free**, pure DI experience.
 
+## 🚀 Quick Start
+
+```bash
+npm install @hwy-fm/di
+```
+
+Make sure to enable decorators in your `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  }
+}
+```
+
+```typescript
+import { Injectable, Injector, INJECTOR_SCOPE, ROOT_SCOPE } from '@hwy-fm/di';
+
+@Injectable()
+class ConfigService {
+  apiUrl = 'https://api.com';
+}
+
+@Injectable()
+class UserService {
+  constructor(private config: ConfigService) {}
+  getUrl() { return this.config.apiUrl; }
+}
+
+const injector = Injector.create([
+  { provide: INJECTOR_SCOPE, useValue: ROOT_SCOPE }
+]);
+
+const user = injector.get(UserService);
+console.log(user.getUrl()); // 'https://api.com'
+```
+
+---
+
 ## ✨ Key Capabilities (Highlights)
 
 ### 1. 🛡️ Environment Awareness & Isolation
@@ -101,22 +142,22 @@ try {
 }
 ```
 
-### 3. 🔥 Smart Scope Proxy (Scope Mismatch Governance)
+### 3. 🔥 Scope Proxy Pattern (Scope Mismatch Solution)
 
-A sophisticated solution for the classic "Request Scope Contagion" problem found in many Node.js frameworks (like NestJS).
+A pattern for solving the classic "Request Scope Contagion" problem found in many Node.js frameworks (like NestJS).
 
 **The Problem:**
 In standard DI, if a Singleton service depends on a Request-scoped service (e.g., `ThreadLocal` context), the Singleton effectively degrades to Request scope. This forces the entire dependency chain to be recreated for every request, causing severe performance degradation.
 
-**Our Solution: Transparent Hook-based Proxying**
+**Solution: Hook-based Proxying**
 
-Utilizing the powerful `HookMetadata` and `customFactory` capabilities, you can inject a **Lazy Proxy** instead of the real instance. The Singleton service remains a Singleton, but when it accesses the dependency, the Proxy transparently fetches the correct instance for the current request context (e.g., via `AsyncLocalStorage`).
+Using `HookMetadata` and `customFactory`, you can inject a **Lazy Proxy** instead of the real instance. The Singleton service remains a Singleton, but when it accesses the dependency, the Proxy transparently fetches the correct instance for the current request context (e.g., via `AsyncLocalStorage`).
 
 ```typescript
-import { HookMetadata, InjectorRecord, AbstractContextStorage } from '@hwy-fm/di';
+import { HookMetadata, Injector } from '@hwy-fm/di';
 
 // 1. Define the Governance Strategy
-function ScopeMismatchGovernance(record: InjectorRecord, next: () => any, injector: Injector) {
+function ScopeMismatchGovernance(record: any, next: () => any, injector: Injector) {
   const isSingletonHost = injector.scope === 'Root'; // or checks against record.scope
   const isRequestDependency = record.scope === 'Request';
 
@@ -126,8 +167,8 @@ function ScopeMismatchGovernance(record: InjectorRecord, next: () => any, inject
     return new Proxy({}, {
       get(target, prop) {
         // Resolve the actual instance from the active request context at Runtime
-        // AbstractContextStorage is an abstraction over AsyncLocalStorage
-        const requestInjector = AbstractContextStorage.getStore();
+        // Use AsyncLocalStorage or similar to get the active request injector
+        const requestInjector = getActiveRequestInjector();
         if (!requestInjector) throw new Error('No active request scope');
         
         const realInstance = requestInjector.get(record.token);
@@ -176,82 +217,38 @@ HookMetadata.hook(MyService, {
 
 ---
 
-## 🏗️ Real-World Application: The HWY-FM Core
+## 🏗️ Real-World Application: The Kernel Engine
 
-While `@hwy-fm/di` provides the raw dependency injection capabilities, **@hwy-fm/core** demonstrates how to build a full-scale isomorphic framework on top of it.
+While `@hwy-fm/di` provides the raw dependency injection capabilities, **@hwy-fm/kernel** builds a microkernel pipeline engine on top of it.
 
 If you are looking for:
-- **Application Bootstrapping**: How to manage root injectors and platform binding.
-- **Logic Orchestration**: How to use DI to build an AOT-compiled pipeline engine (Kernel).
-- **Environment Abstraction**: How to swap implementations based on Context (Server vs Client).
+- **Pipeline Orchestration**: How to use DI to build a composable pipeline engine with Seed / Instruction / Slot.
+- **Multi-Instance Isolation**: How `KernelModel()` creates physically isolated kernel instances with independent DI token spaces.
+- **Cross-Platform Abstraction**: How to run the same pipeline logic across different protocols and environments.
 
-👉 **Check out the @hwy-fm/core documentation to see this DI container in action.**
+👉 **Check out the [@hwy-fm/kernel](https://www.npmjs.com/package/@hwy-fm/kernel) documentation to see this DI container in action.**
 
-The Core framework extends DI with:
-- **`@Application`**: Auto-configuring root injectors.
-- **`@Register`**: Dynamic provider registration for plugins.
-- **`KernelLoader`**: A complex service built entirely using DI patterns.
-
----
-
-## 📦 Installation
-
-```bash
-npm install @hwy-fm/di reflect-metadata
-```
-
-Make sure to enable decorators in your `tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
-  }
-}
-```
+The Kernel engine extends DI with:
+- **`KernelModel()`**: Creates isolated kernel instances with independent drive queues and loaders.
+- **`model.seed(def)`**: Registers pipeline entry points as DI-managed services.
+- **`model.instruction(def)`**: Attaches reusable logic units to pipeline slots.
 
 ---
 
-## 📚 Core Concepts
+## � Core Concepts
 
-### 1. Basic Usage
-
-```typescript
-import { Injectable, Inject, Injector, INJECTOR_SCOPE, ROOT_SCOPE } from '@hwy-fm/di';
-
-// 1. Define
-@Injectable()
-class ConfigService {
-  apiUrl = 'https://api.com';
-}
-
-@Injectable()
-class UserService {
-  // 2. Inject (Constructor Injection)
-  constructor(private config: ConfigService) {}
-
-  getUrl() { return this.config.apiUrl; }
-}
-
-// 3. Create Injector (Must bind ROOT_SCOPE for global services)
-const injector = Injector.create([
-  { provide: INJECTOR_SCOPE, useValue: ROOT_SCOPE }
-]);
-
-// 4. Resolve
-const user = injector.get(UserService);
-```
-
-### 2. Provider Recipes
+### 1. Provider Recipes
 
 ```typescript
+const API_URL = new InjectorToken<string>('API_URL');
+const ALIASED_LOGGER = new InjectorToken<Logger>('AliasedLogger');
+
 const providers = [
   // Class Provider (Standard)
   { provide: Logger, useClass: ConsoleLogger },
 
   // Value Provider (Config/Constants)
-  { provide: 'API_URL', useValue: 'https://api.com' },
+  { provide: API_URL, useValue: 'https://api.com' },
 
   // Factory Provider (Dynamic Creation)
   { 
@@ -261,11 +258,11 @@ const providers = [
   },
 
   // Existing Provider (Aliasing)
-  { provide: 'AliasedLogger', useExisting: Logger }
+  { provide: ALIASED_LOGGER, useExisting: Logger }
 ];
 ```
 
-### 3. Tokens & Interfaces
+### 2. Tokens & Interfaces
 
 Since TypeScript interfaces are erased at runtime, use `InjectorToken`.
 
@@ -446,12 +443,12 @@ Bind multiple services to a single token.
 ```typescript
 const PLUGINS = new InjectorToken('PLUGINS');
 
-@Injectable()
 @MultiToken(PLUGINS)
+@Injectable()
 class AuthPlugin {}
 
-@Injectable()
 @MultiToken(PLUGINS)
+@Injectable()
 class LoggerPlugin {}
 
 // Returns array: [AuthPlugin, LoggerPlugin]
@@ -815,16 +812,16 @@ DEBUG_MODE.enabled = true;
 
 | Decorator | Target | Description |
 | :--- | :--- | :--- |
-| **`@Injectable(options?)`** | Class | Marks a class as available to the injector. Options: `{ scope: 'root' }`. |
-| **`@Inject(token)`** | Constructor Param | Optimizes injection when Type metadata is insufficient. |
+| **`@Injectable(options?)`** | Class | Marks a class as available to the injector. Options: `{ scope }`. |
+| **`@Inject(token)`** | Param / Property | Explicit injection token when type metadata is insufficient. |
 | **`@Token(token)`** | Class | Single binding to a token. |
 | **`@MultiToken(token)`** | Class | Multi binding to a token. |
-| **`@Optional()`** | Constructor Param | Returns `null` if not found. |
-| **`@Self()`** | Constructor Param | Only resolves from local injector. |
-| **`@SkipSelf()`** | Constructor Param | Starts resolution from parent injector. |
+| **`@Optional()`** | Param / Property | Returns `null` if not found. |
+| **`@Self()`** | Param / Property | Only resolves from local injector. |
+| **`@SkipSelf()`** | Param / Property | Starts resolution from parent injector. |
 
 ---
 
-## 📄 License
+## License
 
-MIT © 2024
+MIT © [hwyn](https://github.com/hwyn)

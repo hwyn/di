@@ -1,8 +1,4 @@
 "use strict";
-/**
- * @file university/di/resolution/standard-hook.ts
- * @description Standard implementations for Metadata-Driven Hooks.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.onAdmission = onAdmission;
 exports.onScopeCheck = onScopeCheck;

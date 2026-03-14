@@ -15,6 +15,7 @@ var prop_resolution_1 = require("./prop-resolution");
 var metadata_1 = require("../metadata");
 var async_governance_1 = require("./async-governance");
 var standard_hook_1 = require("./standard-hook");
+var common_1 = require("../common");
 function resolveDefinition(token, record, scope, ctx) {
     var _a;
     if (!record)
@@ -121,10 +122,11 @@ function convertToFactory(type, provider) {
         return createFromUseFactory(type, provider);
     if ('useExisting' in provider)
         return function () { return (0, registry_1.ɵɵInject)(provider.useExisting); };
-    var useClass = provider.useClass || type;
+    var classDef = provider;
+    var useClass = (classDef.useClass || type);
     if (typeof useClass !== 'function')
         throwInvalidDefinition(type);
-    var deps = provider.deps || metadata_1.Reflector.resolveParameters(useClass);
+    var deps = (classDef.deps || metadata_1.Reflector.resolveParameters(useClass));
     return factory(deps, useClass);
 }
 function createFromUseFactory(type, provider) {
@@ -147,7 +149,7 @@ function createFromUseFactory(type, provider) {
 function factory(deps, type) {
     var props = resolvePropsMetadata(type);
     if (deps.length === 0 && !props) {
-        return withType(function () { return new type(); }, type);
+        return withType(function () { return Reflect.construct(type, []); }, type);
     }
     if (!props)
         return withType(createDepsFactory(type, deps), type);
@@ -204,7 +206,7 @@ function withType(fn, type) {
     return fn;
 }
 function throwInvalidDefinition(type) {
-    var name = type.name || type.toString();
+    var name = (0, common_1.getSecureTokenName)(type);
     throw new Error("Invalid provider definition for token: ".concat(name, ". ") +
         "Please ensure 'useClass', 'useValue', 'useFactory' or 'useExisting' is configured.");
 }

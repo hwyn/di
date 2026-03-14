@@ -1,8 +1,4 @@
 "use strict";
-/**
- * @file metadata/index.ts
- * @description Exports all metadata-related definitions (decorators, tokens, providers).
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getInjectableDef = exports.INJECTOR_PROV_DEF = void 0;
 var tslib_1 = require("tslib");
@@ -15,3 +11,4 @@ Object.defineProperty(exports, "getInjectableDef", { enumerable: true, get: func
 tslib_1.__exportStar(require("./provider"), exports);
 tslib_1.__exportStar(require("./reflector"), exports);
 tslib_1.__exportStar(require("./injector-token"), exports);
+tslib_1.__exportStar(require("./types"), exports);

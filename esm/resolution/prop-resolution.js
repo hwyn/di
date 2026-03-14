@@ -1,7 +1,3 @@
-/**
- * @file core/resolution.ts
- * @description Handles the logic for resolving dependencies, including parameter and property injection and transformation.
- */
 import { DecoratorFlags, DI_DECORATOR_FLAG, ResolveMode } from "../metadata/index.js";
 import { getInjector, ɵɵInject, ɵɵInjectAsync } from "../registry/index.js";
 const defCache = new WeakMap();
@@ -68,7 +64,7 @@ function applyTransforms(transforms, context, initialValue, mode) {
     const inj = injector;
     if (mode === ResolveMode.Async) {
         return transforms.reduce((chain, meta) => chain.then((val) => {
-            return inj.getAsync(meta.token).then((pipe) => pipe.transform({
+            return inj.getAsync(meta.token).then(pipe => pipe.transform({
                 mode,
                 value: val,
                 meta,
@@ -109,8 +105,25 @@ export function resolveParams(deps, args = [], mode = ResolveMode.Sync) {
     }
     return result;
 }
+/**
+ * Resolves DI annotations on an object's properties and injects the resolved values.
+ *
+ * Iterates over every property in `props` (a {@link PropMetadataMap} produced by
+ * `Reflector.resolveProperties()`), resolves each property's dependency definition
+ * through the current injection context, and assigns the result back onto `target`.
+ *
+ * In `ResolveMode.Async` mode, all property resolutions run concurrently and the
+ * function returns a `Promise<T>` that settles when every property has been injected.
+ *
+ * @typeParam T - The type of the target object.
+ * @param target - The object whose properties will be injected.
+ * @param props - Map of property names to their decorator annotation metadata arrays.
+ * @param mode - Resolution mode (`Sync` or `Async`). Defaults to `Sync`.
+ * @returns The same `target` (sync) or a `Promise<T>` resolving to `target` (async).
+ */
 export function resolveProps(target, props, mode = ResolveMode.Sync) {
     const context = { target, key: '', injector: getInjector() };
+    const obj = target;
     if (mode === ResolveMode.Async) {
         const promises = [];
         for (const key in props) {
@@ -118,13 +131,13 @@ export function resolveProps(target, props, mode = ResolveMode.Sync) {
             const v = resolveValue(props[key], context, mode);
             if (v instanceof Promise) {
                 promises.push(v.then(val => {
-                    if (val !== target[key])
-                        target[key] = val;
+                    if (val !== obj[key])
+                        obj[key] = val;
                 }));
             }
             else {
-                if (v !== target[key])
-                    target[key] = v;
+                if (v !== obj[key])
+                    obj[key] = v;
             }
         }
         return Promise.all(promises).then(() => target);
@@ -133,8 +146,8 @@ export function resolveProps(target, props, mode = ResolveMode.Sync) {
         for (const key in props) {
             context.key = key;
             const value = resolveValue(props[key], context, mode);
-            if (value !== target[key])
-                target[key] = value;
+            if (value !== obj[key])
+                obj[key] = value;
         }
         return target;
     }

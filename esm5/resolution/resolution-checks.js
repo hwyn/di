@@ -1,8 +1,5 @@
-/**
- * @file resolution/resolution-checks.ts
- * @description Helpers for checking resolution constraints and flags.
- */
 import { InjectFlags, RecordFlags } from "../metadata/index.js";
+import { getSecureTokenName } from "../common/index.js";
 export function validateSkipSelf(flags) {
     if (flags & InjectFlags.Self)
         throw new Error('Cannot combine SkipSelf and Self flags.');
@@ -10,19 +7,22 @@ export function validateSkipSelf(flags) {
 export function checkNoProvider(token, flags) {
     if (flags & InjectFlags.Optional)
         return null;
-    throw new Error("No provider for ".concat(token.name || token));
+    var msg = "No provider for ".concat(getSecureTokenName(token));
+    throw new Error(msg);
 }
 export function checkSelfAndOptional(token, flags, record) {
     if (flags & InjectFlags.Self) {
         if (record || flags & InjectFlags.Optional)
             return record;
-        throw new Error("No provider for ".concat(token.name || token));
+        var msg = "No provider for ".concat(getSecureTokenName(token));
+        throw new Error(msg);
     }
 }
 export function validateResolution(token, record, flags) {
     if (record && (flags & RecordFlags.MaskFromChild) && (record.flags & RecordFlags.Private)) {
         if (flags & InjectFlags.Optional)
             return;
-        throw new Error("No provider for ".concat(token.name || token, " (Private to definition scope)"));
+        var msg = "No provider for ".concat(getSecureTokenName(token), " (Private to definition scope)");
+        throw new Error(msg);
     }
 }

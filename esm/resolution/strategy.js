@@ -5,6 +5,7 @@ import { resolveParams, resolveProps } from "./prop-resolution.js";
 import { EMPTY_ARRAY, getInjectableDef, IGNORE_SCOPE, NO_VALUE, RecordFlags, Reflector, ResolveMode } from "../metadata/index.js";
 import { AsyncGovernance } from "./async-governance.js";
 import { onAdmission, onScopeCheck } from "./standard-hook.js";
+import { getSecureTokenName } from "../common/index.js";
 export function resolveDefinition(token, record, scope, ctx) {
     var _a;
     if (!record)
@@ -85,10 +86,11 @@ export function convertToFactory(type, provider) {
         return createFromUseFactory(type, provider);
     if ('useExisting' in provider)
         return () => ɵɵInject(provider.useExisting);
-    const useClass = provider.useClass || type;
+    const classDef = provider;
+    const useClass = (classDef.useClass || type);
     if (typeof useClass !== 'function')
         throwInvalidDefinition(type);
-    const deps = provider.deps || Reflector.resolveParameters(useClass);
+    const deps = (classDef.deps || Reflector.resolveParameters(useClass));
     return factory(deps, useClass);
 }
 function createFromUseFactory(type, provider) {
@@ -110,7 +112,7 @@ function createFromUseFactory(type, provider) {
 function factory(deps, type) {
     const props = resolvePropsMetadata(type);
     if (deps.length === 0 && !props) {
-        return withType(() => new type(), type);
+        return withType(() => Reflect.construct(type, []), type);
     }
     if (!props)
         return withType(createDepsFactory(type, deps), type);
@@ -157,7 +159,7 @@ function withType(fn, type) {
     return fn;
 }
 function throwInvalidDefinition(type) {
-    const name = type.name || type.toString();
+    const name = getSecureTokenName(type);
     throw new Error(`Invalid provider definition for token: ${name}. ` +
         `Please ensure 'useClass', 'useValue', 'useFactory' or 'useExisting' is configured.`);
 }

@@ -1,7 +1,3 @@
-/**
- * @file core/resolution.ts
- * @description Handles the logic for resolving dependencies, including parameter and property injection and transformation.
- */
 import { __assign, __values } from "tslib";
 import { DecoratorFlags, DI_DECORATOR_FLAG, ResolveMode } from "../metadata/index.js";
 import { getInjector, ɵɵInject, ɵɵInjectAsync } from "../registry/index.js";
@@ -123,9 +119,26 @@ export function resolveParams(deps, args, mode) {
     }
     return result;
 }
+/**
+ * Resolves DI annotations on an object's properties and injects the resolved values.
+ *
+ * Iterates over every property in `props` (a {@link PropMetadataMap} produced by
+ * `Reflector.resolveProperties()`), resolves each property's dependency definition
+ * through the current injection context, and assigns the result back onto `target`.
+ *
+ * In `ResolveMode.Async` mode, all property resolutions run concurrently and the
+ * function returns a `Promise<T>` that settles when every property has been injected.
+ *
+ * @typeParam T - The type of the target object.
+ * @param target - The object whose properties will be injected.
+ * @param props - Map of property names to their decorator annotation metadata arrays.
+ * @param mode - Resolution mode (`Sync` or `Async`). Defaults to `Sync`.
+ * @returns The same `target` (sync) or a `Promise<T>` resolving to `target` (async).
+ */
 export function resolveProps(target, props, mode) {
     if (mode === void 0) { mode = ResolveMode.Sync; }
     var context = { target: target, key: '', injector: getInjector() };
+    var obj = target;
     if (mode === ResolveMode.Async) {
         var promises = [];
         var _loop_1 = function (key) {
@@ -133,13 +146,13 @@ export function resolveProps(target, props, mode) {
             var v = resolveValue(props[key], context, mode);
             if (v instanceof Promise) {
                 promises.push(v.then(function (val) {
-                    if (val !== target[key])
-                        target[key] = val;
+                    if (val !== obj[key])
+                        obj[key] = val;
                 }));
             }
             else {
-                if (v !== target[key])
-                    target[key] = v;
+                if (v !== obj[key])
+                    obj[key] = v;
             }
         };
         for (var key in props) {
@@ -151,8 +164,8 @@ export function resolveProps(target, props, mode) {
         for (var key in props) {
             context.key = key;
             var value = resolveValue(props[key], context, mode);
-            if (value !== target[key])
-                target[key] = value;
+            if (value !== obj[key])
+                obj[key] = value;
         }
         return target;
     }

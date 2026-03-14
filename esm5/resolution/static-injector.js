@@ -1,11 +1,7 @@
-/**
- * @file impl/static-injector.ts
- * @description Concrete implementation of the Injector class (StaticInjector), managing scope and resolution.
- */
 import { __awaiter, __generator, __read, __values } from "tslib";
 import { getInjector, Injector, INJECTOR, INJECTOR_SCOPE, runInInjectionContext, INTERCEPTORS } from "../registry/index.js";
 import { InjectFlags, NO_VALUE, RecordFlags } from "../metadata/index.js";
-import { deepForEach, debugLog as log, DEBUG_MODE, enhanceError, InstantiationPolicy } from "../common/index.js";
+import { deepForEach, debugLog as log, DEBUG_MODE, enhanceError, InstantiationPolicy, getSecureTokenName } from "../common/index.js";
 import { dispose, instantiate, instantiateAsync, isDisposable } from "./instantiator.js";
 import { makeRecord, resolveMulti, composeInterceptors, resolveDefinition, resolveMultiAsync } from "./strategy.js";
 import { AsyncGovernance } from "./async-governance.js";
@@ -13,6 +9,27 @@ import { onTransientCheck, onDispose, onAdmission } from "./standard-hook.js";
 import { checkNoProvider, checkSelfAndOptional, validateResolution, validateSkipSelf } from "./resolution-checks.js";
 import { ContextualInjector } from "./contextual-injector.js";
 export { InjectFlags } from "../metadata/index.js";
+/**
+ * Batch-registers a potentially nested array of providers into an `Injector`.
+ *
+ * Flattens arbitrarily nested `Provider[]` and calls `injector.set()` for each
+ * entry. For providers with an explicit `provide` key ({@link AbstractProvider}),
+ * that key is used as the token; otherwise the provider itself is used as the token
+ * (i.e. a class reference acting as both token and implementation).
+ *
+ * @param injector - The target `Injector` instance to register providers into.
+ * @param providers - A provider array (may be nested or `null`/`undefined`).
+ *
+ * @example
+ * ```ts
+ * const injector = Injector.create([]);
+ * deepProviders(injector, [
+ *   Logger,
+ *   { provide: CONFIG_TOKEN, useValue: { debug: true } },
+ *   [CacheService, [NestedProvider]],
+ * ]);
+ * ```
+ */
 export function deepProviders(injector, providers) {
     deepForEach(providers, function (item) {
         var _a;
@@ -43,12 +60,12 @@ var StaticInjector = /** @class */ (function () {
     StaticInjector.prototype.get = function (token, flags) {
         var _this = this;
         if (flags === void 0) { flags = InjectFlags.Default; }
-        DEBUG_MODE.enabled && log('get', token.name || token);
+        DEBUG_MODE.enabled && log('get', getSecureTokenName(token));
         var _a = this.resolveBoundaryOrCache(token, flags, function (p, f) { return p.get(token, f); }), value = _a.value, record = _a.record;
         if (value !== NO_VALUE)
             return value;
         if (record) {
-            AsyncGovernance.enforceLock(record, token.name || token);
+            AsyncGovernance.enforceLock(record, token);
         }
         if (record === null)
             return this.tryParent(token, flags, null);
@@ -66,17 +83,19 @@ var StaticInjector = /** @class */ (function () {
     };
     StaticInjector.prototype.getAsync = function (token_1) {
         return __awaiter(this, arguments, Promise, function (token, flags, resolutionStack) {
-            var _a, value, record, prev, ctx;
+            var _a, value, record, chain, msg, prev, ctx;
             var _this = this;
             if (flags === void 0) { flags = InjectFlags.Default; }
             if (resolutionStack === void 0) { resolutionStack = new Set(); }
             return __generator(this, function (_b) {
-                DEBUG_MODE.enabled && log('getAsync', token.name || token);
+                DEBUG_MODE.enabled && log('getAsync', getSecureTokenName(token));
                 _a = this.resolveBoundaryOrCache(token, flags, function (p, f) { return p.getAsync(token, f); }), value = _a.value, record = _a.record;
                 if (value !== NO_VALUE)
                     return [2 /*return*/, value];
                 if (resolutionStack.has(token)) {
-                    throw new Error("Cyclic dependency detected in async resolution: ".concat(Array.from(resolutionStack).map(function (t) { return t.name || t; }).join(' -> '), " -> ").concat(token.name || token));
+                    chain = Array.from(resolutionStack).map(function (t) { return getSecureTokenName(t); }).join(' -> ');
+                    msg = "Cyclic dependency detected in async resolution: ".concat(chain, " -> ").concat(getSecureTokenName(token));
+                    throw new Error(msg);
                 }
                 if (record && record.resolving) {
                     return [2 /*return*/, record.resolving];
@@ -117,7 +136,7 @@ var StaticInjector = /** @class */ (function () {
         if (isMulti) {
             var record_1 = this.records.get(token);
             if (record_1 && (record_1.value !== NO_VALUE || record_1.resolving)) {
-                var msg = "[DI] Warning: Trying to add a provider to an already resolved multi-token '".concat(token.name || token, "'. This provider will be ignored.");
+                var msg = "[DI] Warning: Trying to add a provider to an already resolved multi-token '".concat(getSecureTokenName(token), "'. This provider will be ignored.");
                 if (InstantiationPolicy.strictMultiInjection) {
                     throw new Error(msg.replace('Warning:', 'Error:'));
                 }
@@ -133,7 +152,8 @@ var StaticInjector = /** @class */ (function () {
         else {
             var record = this.records.get(token);
             if (record && record.value !== NO_VALUE) {
-                throw new Error("[DI] Error: Cannot overwrite provider for '".concat(token.name || token, "' because it has already been instantiated."));
+                var msg = "[DI] Error: Cannot overwrite provider for '".concat(getSecureTokenName(token), "' because it has already been instantiated.");
+                throw new Error(msg);
             }
             this.records.set(token, { factory: undefined, value: NO_VALUE, multi: undefined, provider: provider });
         }
@@ -196,17 +216,31 @@ var StaticInjector = /** @class */ (function () {
         return this.records.get(token);
     };
     StaticInjector.prototype.tryParent = function (token, flags, record) {
-        var _a;
         checkSelfAndOptional(token, flags, record);
-        return (_a = this.parent) === null || _a === void 0 ? void 0 : _a.get(token, flags | RecordFlags.MaskFromChild);
+        if (flags & InjectFlags.Self)
+            return null;
+        if (this.parent) {
+            return this.parent.get(token, flags | RecordFlags.MaskFromChild);
+        }
+        if (flags & InjectFlags.Optional)
+            return null;
+        var msg = "No provider for ".concat(getSecureTokenName(token));
+        throw new Error(msg);
     };
     StaticInjector.prototype.tryParentAsync = function (token, flags, record, stack) {
-        var _a;
         checkSelfAndOptional(token, flags, record);
+        if (flags & InjectFlags.Self)
+            return Promise.resolve(null);
         if (this.parent instanceof StaticInjector && stack) {
             return this.parent.getAsync(token, flags | RecordFlags.MaskFromChild, stack);
         }
-        return (_a = this.parent) === null || _a === void 0 ? void 0 : _a.getAsync(token, flags | RecordFlags.MaskFromChild);
+        if (this.parent) {
+            return this.parent.getAsync(token, flags | RecordFlags.MaskFromChild);
+        }
+        if (flags & InjectFlags.Optional)
+            return Promise.resolve(null);
+        var msg = "No provider for ".concat(getSecureTokenName(token));
+        return Promise.reject(new Error(msg));
     };
     StaticInjector.prototype.tryResolve = function (token, record, flags) {
         record = this.resolveRecord(token, record);
@@ -217,7 +251,8 @@ var StaticInjector = /** @class */ (function () {
             return this.tryParent(token, flags, record);
         if (flags & InjectFlags.Optional)
             return null;
-        throw new Error("No provider for ".concat(token.name || token));
+        var msg = "No provider for ".concat(getSecureTokenName(token));
+        throw new Error(msg);
     };
     StaticInjector.prototype.tryResolveAsync = function (token, record, flags, ctx) {
         if (ctx === void 0) { ctx = this; }
@@ -226,12 +261,13 @@ var StaticInjector = /** @class */ (function () {
         if (record)
             return this.hydrateAsync(token, record, ctx);
         if (this.parent) {
-            var stack = ctx instanceof ContextualInjector ? ctx.stack : undefined;
+            var stack = ctx instanceof ContextualInjector ? ctx['stack'] : undefined;
             return this.tryParentAsync(token, flags, record, stack);
         }
         if (flags & InjectFlags.Optional)
-            return null;
-        throw new Error("No provider for ".concat(token.name || token));
+            return Promise.resolve(null);
+        var msg = "No provider for ".concat(getSecureTokenName(token));
+        throw new Error(msg);
     };
     StaticInjector.prototype.resolveRecord = function (token, record) {
         if (record === null)
@@ -243,7 +279,7 @@ var StaticInjector = /** @class */ (function () {
         return resolved;
     };
     StaticInjector.prototype.hydrateSync = function (token, record) {
-        AsyncGovernance.enforceLock(record, token.toString());
+        AsyncGovernance.enforceLock(record, token);
         var value = instantiate(token, record, this);
         if (value instanceof Promise && !(record.provider && 'useValue' in record.provider)) {
             AsyncGovernance.enforceSyncConstraint(token);
@@ -252,7 +288,7 @@ var StaticInjector = /** @class */ (function () {
     };
     StaticInjector.prototype.hydrateAsync = function (token_1, record_2) {
         return __awaiter(this, arguments, Promise, function (token, record, ctx) {
-            var worker, value, _a, _b, item;
+            var worker, value, _a, _b, item, msg;
             var e_3, _c;
             if (ctx === void 0) { ctx = this; }
             return __generator(this, function (_d) {
@@ -282,7 +318,8 @@ var StaticInjector = /** @class */ (function () {
                             else if (isDisposable(value)) {
                                 dispose(value);
                             }
-                            throw new Error("Injector destroyed during resolution of: ".concat(token));
+                            msg = "Injector destroyed during resolution of: ".concat(getSecureTokenName(token));
+                            throw new Error(msg);
                         }
                         return [2 /*return*/, this.finishHydrate(token, record, value)];
                 }

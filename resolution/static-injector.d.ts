@@ -1,17 +1,34 @@
-/**
- * @file impl/static-injector.ts
- * @description Concrete implementation of the Injector class (StaticInjector), managing scope and resolution.
- */
 import { Injector, InjectorRecord, InternalInjector } from '../registry';
 import { Provider, TokenKey, Type } from '../metadata';
 export { InjectFlags } from '../metadata';
+/**
+ * Batch-registers a potentially nested array of providers into an `Injector`.
+ *
+ * Flattens arbitrarily nested `Provider[]` and calls `injector.set()` for each
+ * entry. For providers with an explicit `provide` key ({@link AbstractProvider}),
+ * that key is used as the token; otherwise the provider itself is used as the token
+ * (i.e. a class reference acting as both token and implementation).
+ *
+ * @param injector - The target `Injector` instance to register providers into.
+ * @param providers - A provider array (may be nested or `null`/`undefined`).
+ *
+ * @example
+ * ```ts
+ * const injector = Injector.create([]);
+ * deepProviders(injector, [
+ *   Logger,
+ *   { provide: CONFIG_TOKEN, useValue: { debug: true } },
+ *   [CacheService, [NestedProvider]],
+ * ]);
+ * ```
+ */
 export declare function deepProviders(injector: Injector, providers?: Provider[] | null): void;
 export declare class StaticInjector implements InternalInjector {
     private scope;
     private isDestroyed;
     private onDestroy;
     private records;
-    interceptStrategy: ((instance: any, token: any) => any) | null;
+    interceptStrategy: ((instance: unknown, token: TokenKey) => unknown) | null;
     parent?: Injector;
     get destroyed(): boolean;
     constructor(additionalProviders?: Provider[] | null, parent?: Injector);

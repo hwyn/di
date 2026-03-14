@@ -1,15 +1,11 @@
-/**
- * @file impl/lifecycle.ts
- * @description Helper functions for object instantiation and disposal (lifecycle management).
- */
 import { __awaiter } from "tslib";
 import { HookMetadata } from "../registry/index.js";
 import { ResolveMode } from "../metadata/index.js";
-import { debugLog as log, InstantiationPolicy, DEBUG_MODE } from "../common/index.js";
+import { debugLog as log, InstantiationPolicy, DEBUG_MODE, getSecureTokenName } from "../common/index.js";
 import { runAfter, runAfterAsync, runBefore, runBeforeAsync, runError } from "./standard-hook.js";
 import { guardCyclicDependency } from "./cyclic.js";
 function getTokenName(token) {
-    return token.name || (typeof token === 'string' ? token : token.toString());
+    return getSecureTokenName(token);
 }
 function resolveMetadata(token, record) {
     if (record.metadata)
@@ -21,7 +17,7 @@ function resolveMetadata(token, record) {
     return metadata;
 }
 function hasOnInit(instance) {
-    return instance && typeof instance.onInit === 'function';
+    return !!instance && typeof instance.onInit === 'function';
 }
 function reportAsyncLeak(token) {
     var _a;
@@ -33,7 +29,7 @@ function reportAsyncLeak(token) {
     (_a = InstantiationPolicy.logger) === null || _a === void 0 ? void 0 : _a.warn(msg);
 }
 export function isDisposable(instance) {
-    return instance && typeof instance.destroy === 'function';
+    return !!instance && typeof instance.destroy === 'function';
 }
 export function dispose(instance) {
     if (isDisposable(instance)) {
@@ -96,9 +92,10 @@ function applyInterceptorSync(instance, token, ctx) {
         return instance;
     const result = strategy(instance, token);
     if (result && typeof result.then === 'function') {
-        throw new Error(`[DI] Error: Interceptor for '${getTokenName(token)}' returned a Promise in a synchronous resolution context. This is not allowed.`);
+        const msg = `[DI] Error: Interceptor for '${getTokenName(token)}' returned a Promise in a synchronous resolution context. This is not allowed.`;
+        throw new Error(msg);
     }
-    return result || instance;
+    return result !== undefined ? result : instance;
 }
 export function instantiateAsync(token, record, ctx) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -108,7 +105,7 @@ export function instantiateAsync(token, record, ctx) {
 }
 export function executeInstantiationAsync(token, record, ctx) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c;
+        var _a, _b, _c, _d, _e;
         const metadata = resolveMetadata(token, record);
         if (!metadata) {
             const instance = yield record.factory(ctx, ResolveMode.Async);
@@ -154,7 +151,9 @@ export function executeInstantiationAsync(token, record, ctx) {
                 try {
                     dispose(instance);
                 }
-                catch (e) { /* clean rollback */ }
+                catch (disposeErr) {
+                    (_e = (_d = InstantiationPolicy.logger) === null || _d === void 0 ? void 0 : _d.warn) === null || _e === void 0 ? void 0 : _e.call(_d, '[DI] Rollback disposal failed: ' + (disposeErr instanceof Error ? disposeErr.message : disposeErr));
+                }
             }
             throw e;
         }
@@ -168,8 +167,9 @@ function applyInterceptorAsync(instance, token, ctx) {
             return instance;
         const result = strategy(instance, token);
         if (result && typeof result.then === 'function') {
-            return (yield result) || instance;
+            const awaited = yield result;
+            return awaited !== undefined ? awaited : instance;
         }
-        return result || instance;
+        return result !== undefined ? result : instance;
     });
 }
